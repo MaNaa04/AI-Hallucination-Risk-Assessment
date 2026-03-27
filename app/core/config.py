@@ -20,9 +20,10 @@ class Settings(BaseSettings):
     port: int = 8000
     
     # LLM Configuration
+    llm_provider: str = "gemini"  # "gemini" or "openai"
     llm_api_key: str = ""
-    llm_model: str = "gpt-4"
-    llm_api_base: str = "https://api.openai.com/v1"
+    llm_model: str = "gemini-2.0-flash"  # or "gpt-4", "gpt-3.5-turbo"
+    llm_api_base: str = ""
     
     # External API Keys
     serpapi_key: str = ""

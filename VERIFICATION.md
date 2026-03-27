@@ -116,3 +116,53 @@ print('Title:', result['title'])
 print('Content:', result['content'][:200] if result['content'] else 'None')
 "
 ```
+
+---
+
+## Layer 4: LLM Judge
+
+### Automated Tests
+
+```bash
+python -m pytest tests/test_judge.py -v
+```
+
+**Expected**: 14 tests pass (3 prompt + 7 parsing + 4 judge)
+
+### Setup
+
+1. Copy `.env.example` to `.env`
+2. Set your Gemini API key:
+```bash
+cp .env.example .env
+# Edit .env and set:
+# LLM_PROVIDER=gemini
+# LLM_API_KEY=your_gemini_api_key
+# LLM_MODEL=gemini-2.0-flash
+```
+
+### Full Pipeline Test
+
+With a valid `.env`, restart the server and test end-to-end:
+
+```bash
+python main.py
+```
+
+```bash
+curl -s -X POST http://localhost:8000/api/verify \
+  -H 'Content-Type: application/json' \
+  -d '{"question": "What is the capital of France?", "answer": "Paris is the capital of France."}' | python3 -m json.tool
+```
+
+**Expected**: Real score, verdict, explanation from LLM judge (not 50/unverifiable)
+
+---
+
+## Run All Tests
+
+```bash
+python -m pytest tests/ -v
+```
+
+**Expected**: 94 tests pass
