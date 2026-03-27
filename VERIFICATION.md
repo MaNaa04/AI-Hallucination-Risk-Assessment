@@ -91,3 +91,28 @@ print('Type:', QueryPreprocessor.determine_query_type('Should I learn Python or 
 "
 ```
 
+---
+
+## Layer 3: Retrieval Engine
+
+### Automated Tests
+
+```bash
+python -m pytest tests/test_retrievers.py -v
+```
+
+**Expected**: 25 tests pass (5 Wikipedia + 3 SerpAPI + 8 router + 9 aggregator)
+
+### Quick Manual Test
+
+```bash
+python -c "
+from app.services.retrieval.wikipedia_retriever import WikipediaRetriever
+
+retriever = WikipediaRetriever()
+result = retriever.search('Paris')
+print('Found:', result['found'])
+print('Title:', result['title'])
+print('Content:', result['content'][:200] if result['content'] else 'None')
+"
+```
