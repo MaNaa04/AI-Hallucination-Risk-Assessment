@@ -68,15 +68,30 @@ class VerifyResponse(BaseModel):
         default=None,
         description="Which sources provided evidence (Wikipedia, SerpAPI, etc.)"
     )
+    request_id: Optional[str] = Field(
+        default=None,
+        description="Unique request ID for tracing and debugging"
+    )
+    processing_time_ms: Optional[int] = Field(
+        default=None,
+        description="Total pipeline processing time in milliseconds"
+    )
     
     @staticmethod
-    def from_judge_response(judge_resp: JudgeResponse, sources: Optional[list[str]] = None) -> "VerifyResponse":
+    def from_judge_response(
+        judge_resp: JudgeResponse,
+        sources: Optional[list[str]] = None,
+        request_id: Optional[str] = None,
+        processing_time_ms: Optional[int] = None,
+    ) -> "VerifyResponse":
         """
         Convert LLM Judge response to user-facing response.
         
         Args:
             judge_resp: Raw judge response
             sources: Sources used for evidence retrieval
+            request_id: Unique request ID for tracing
+            processing_time_ms: Pipeline processing time
             
         Returns:
             Formatted response with user-friendly verdict
@@ -94,7 +109,9 @@ class VerifyResponse(BaseModel):
             verdict=verdict,
             explanation=judge_resp.explanation,
             flag=judge_resp.flag,
-            sources_used=sources
+            sources_used=sources,
+            request_id=request_id,
+            processing_time_ms=processing_time_ms,
         )
     
     class Config:
@@ -104,6 +121,8 @@ class VerifyResponse(BaseModel):
                 "verdict": "accurate",
                 "explanation": "Verified against Wikipedia. Paris is indeed the capital of France.",
                 "flag": False,
-                "sources_used": ["Wikipedia"]
+                "sources_used": ["Wikipedia"],
+                "request_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+                "processing_time_ms": 1250
             }
         }
