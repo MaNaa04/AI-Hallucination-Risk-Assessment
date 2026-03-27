@@ -1,0 +1,22 @@
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+pydantic==2.5.0
+pydantic-settings==2.1.0
+python-dotenv==1.0.0
+
+# External APIs
+wikipedia-api==1.0.0
+google-search-results==2.4.3
+
+# LLM Clients (choose based on your provider)
+openai>=1.3.0
+anthropic>=0.7.0
+# Or other LLM clients as needed
+
+# Optional: Caching
+redis==5.0.1
+
+# Development
+pytest==7.4.3
+pytest-asyncio==0.21.1
+httpx==0.25.2
