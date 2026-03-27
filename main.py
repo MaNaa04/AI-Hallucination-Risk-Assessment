@@ -2,6 +2,7 @@
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from contextlib import asynccontextmanager
 from app.core.config import get_settings
 from app.core.logging import get_logger
 from app.api.routes.verify import router as verify_router
@@ -12,12 +13,21 @@ logger = get_logger(__name__)
 # Load settings
 settings = get_settings()
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Lifecycle events for the FastAPI application."""
+    logger.info(f"Starting {settings.app_name} v{settings.app_version}")
+    logger.info(f"Debug mode: {settings.app_debug}")
+    yield
+    logger.info("Shutting down application")
+
 # Create FastAPI app
 app = FastAPI(
     title=settings.app_name,
     version=settings.app_version,
     description="Backend for AI Hallucination Detection System",
-    debug=settings.app_debug
+    debug=settings.app_debug,
+    lifespan=lifespan
 )
 
 # Add CORS middleware for extension communication
@@ -31,20 +41,6 @@ app.add_middleware(
 
 # Include routers
 app.include_router(verify_router)
-
-
-@app.on_event("startup")
-async def startup_event():
-    """Run on application startup."""
-    logger.info(f"Starting {settings.app_name} v{settings.app_version}")
-    logger.info(f"Debug mode: {settings.app_debug}")
-
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    """Run on application shutdown."""
-    logger.info("Shutting down application")
-
 
 @app.get("/")
 async def root():

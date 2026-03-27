@@ -33,18 +33,18 @@ RECENT_EVENT_KEYWORDS = [
 ]
 
 NUMERIC_PATTERNS = [
-    r"^how many\b", r"^how much\b", r"^what percentage\b",
-    r"^what number\b", r"^how often\b", r"^what is the rate\b",
-    r"^how long\b", r"^how old\b", r"^how far\b", r"^how tall\b",
-    r"^what is the population\b", r"^how fast\b",
+    r"\bhow many\b", r"\bhow much\b", r"\bwhat percentage\b",
+    r"\bwhat number\b", r"\bhow often\b", r"\bwhat is the rate\b",
+    r"\bhow long\b", r"\bhow old\b", r"\bhow far\b", r"\bhow tall\b",
+    r"\bwhat is the population\b", r"\bhow fast\b",
 ]
 
 OPINION_PATTERNS = [
-    r"^should\b", r"^do you think\b", r"^is it worth\b",
-    r"^what do you recommend\b", r"^what's better\b", r"^what is better\b",
-    r"^is it good\b", r"^is it bad\b", r"^would you\b",
-    r"^what's your opinion\b", r"^what is your opinion\b",
-    r"^can you suggest\b", r"^what are the pros\b",
+    r"\bshould\b", r"\bdo you think\b", r"\bis it worth\b",
+    r"\bwhat do you recommend\b", r"\bwhat's better\b", r"\bwhat is better\b",
+    r"\bis it good\b", r"\bis it bad\b", r"\bwould you\b",
+    r"\bwhat's your opinion\b", r"\bwhat is your opinion\b",
+    r"\bcan you suggest\b", r"\bwhat are the pros\b",
 ]
 
 # ── Patterns for filtering non-factual sentences ──────────────────
