@@ -40,7 +40,7 @@ class SourceRouter:
             List of source names to query
         """
         routing_rules = {
-            "encyclopedic": ["wikipedia"],
+            "encyclopedic": ["wikipedia", "serpapi"],
             "recent_event": ["serpapi", "wikipedia"],
             "numeric_statistical": ["wikipedia", "serpapi"],
             "opinion_subjective": [],  # Skip retrieval

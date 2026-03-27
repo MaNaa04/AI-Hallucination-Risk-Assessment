@@ -32,30 +32,50 @@ class WikipediaRetriever:
         Extract search terms from a claim/query.
 
         Wikipedia API needs article titles, not full sentences.
-        We try: full query first, then capitalized words (proper nouns),
-        then meaningful noun phrases.
+        Strategy:
+        1. Full query (sometimes works for exact article titles)
+        2. Named entities: year + acronym + noun combos ("2022 FIFA World Cup")
+        3. Capitalized proper nouns ("Argentina", "France")
+        4. Acronyms ("FIFA", "NATO", "NASA")
 
         Args:
-            query: A claim like "Paris is the capital of France"
+            query: A claim like "The 2022 FIFA World Cup was won by Argentina"
 
         Returns:
-            List of search terms to try, e.g. ["Paris is the capital of France", "Paris", "France"]
+            List of search terms to try
         """
-        terms = [query]  # Try full query first
+        terms = []
 
-        # Extract capitalized words (likely proper nouns / entities)
-        capitalized = re.findall(r'\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\b', query)
+        STOP_WORDS = {"The", "This", "That", "These", "Those", "Its", "His",
+                       "Her", "Our", "Their", "Was", "Were", "Has", "Had",
+                       "Are", "Not", "And", "But", "For", "With"}
+
+        # Extract multi-word entities: sequences of capitalized/acronym words
+        # with optional year prefix. Matches "2022 FIFA World Cup", "United Nations"
+        entities = re.findall(
+            r'(?:\d{4}\s+)?(?:[A-Z][a-zA-Z]*\s+)*[A-Z][a-zA-Z]*', query
+        )
+        for entity in entities:
+            entity = entity.strip()
+            if entity not in terms and len(entity) > 2 and entity not in STOP_WORDS:
+                terms.append(entity)
+
+        # Sort entities: multi-word first (more specific = better Wikipedia match)
+        terms.sort(key=lambda t: len(t.split()), reverse=True)
+
+        # Extract individual capitalized words (proper nouns)
+        capitalized = re.findall(r'\b[A-Z][a-z]+\b', query)
         for term in capitalized:
-            if term not in terms and len(term) > 2:
+            if term not in terms and len(term) > 2 and term not in STOP_WORDS:
                 terms.append(term)
 
-        # Extract words longer than 4 chars as fallback
-        words = re.findall(r'\b\w{5,}\b', query)
-        for word in words:
-            if word not in terms and word[0].isupper():
-                terms.append(word)
+        # Extract acronyms (all-caps words, 2+ chars)
+        acronyms = re.findall(r'\b[A-Z]{2,}\b', query)
+        for acr in acronyms:
+            if acr not in terms:
+                terms.append(acr)
 
-        return terms
+        return terms if terms else [query]
 
     def search(self, query: str, max_results: int = 2) -> dict:
         """
@@ -90,9 +110,8 @@ class WikipediaRetriever:
                     logger.info(f"Wikipedia page found but no summary: {term}")
                     continue
 
-                # Trim to first ~2 paragraphs
-                paragraphs = summary.split("\n")
-                content = "\n".join(paragraphs[:max_results])
+                # Use full summary (Wikipedia summaries are usually 1-3k chars)
+                content = summary[:3000]
 
                 # Simple relevance: check if query words appear in content
                 query_words = set(query.lower().split())
