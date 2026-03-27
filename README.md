@@ -1,344 +1,287 @@
-# AI Hallucination Detection System - Backend
+# AI Hallucination Detection System
 
-## Project Overview
+A complete system to detect AI hallucinations using evidence-grounded verification with Wikipedia and web search sources. **Uses FREE Google Gemini API!**
 
-This backend system detects and flags AI hallucinations by grounding LLM judgments in external evidence sources.
+## Features
 
-### Key Features
-- **Evidence-Grounded Verification**: Uses Wikipedia and SerpAPI to retrieve evidence
-- **Smart Query Routing**: Routes queries to appropriate sources based on type
-- **LLM Judge**: Evidence-based evaluation reduces judge hallucinations
-- **Extensible Architecture**: Layered design allows easy addition of new components
+- **Evidence-Grounded Verification**: Uses Wikipedia and SerpAPI for fact-checking
+- **Smart Query Routing**: Routes queries to appropriate sources based on content type
+- **FREE LLM Judge**: Uses Google Gemini (completely free!) for evaluation
+- **Chrome Extension**: Right-click to verify any AI-generated text
+- **Production Ready**: Complete implementation with error handling
 
 ## Architecture
 
-The backend follows a 5-layer architecture:
-
-### Layer 1: API Gateway
-- **File**: `app/api/routes/verify.py`
-- **Responsibility**: Validate input, parse request, coordinate pipeline
-- **Endpoint**: `POST /verify`
-- Input: `{ "question": "...", "answer": "..." }`
-
-### Layer 2: Query Preprocessor
-- **File**: `app/services/preprocessing/query_preprocessor.py`
-- **Responsibility**: Extract factual claims, determine query type
-- **Output**: Structured claims and type classification
-
-### Layer 3: Retrieval Engine
-- **Files**:
-  - `app/services/retrieval/wikipedia_retriever.py` - Encyclopedic facts
-  - `app/services/retrieval/serp_retriever.py` - Recent events & web results
-  - `app/services/retrieval/source_router.py` - Routing logic
-  - `app/services/retrieval/evidence_aggregator.py` - Dedup, rank, trim evidence
-
-### Layer 4: LLM Judge
-- **File**: `app/services/judge/llm_judge.py`
-- **Responsibility**: Evidence-grounded fact verification
-- **Output**: Score (0-100), verdict, explanation
-
-### Layer 5: Response Builder
-- **File**: `app/models/response.py`
-- **Responsibility**: Format judge output for frontend
-- **Output**: User-friendly verdict (accurate/uncertain/hallucination)
-
-## Project Structure
-
 ```
-.
-├── app/
-│   ├── api/
-│   │   ├── routes/
-│   │   │   └── verify.py              # Layer 1 - API Gateway
-│   │   └── __init__.py
-│   ├── core/
-│   │   ├── config.py                  # Settings & environment
-│   │   ├── logging.py                 # Shared logger
-│   │   └── __init__.py
-│   ├── models/
-│   │   ├── request.py                 # Pydantic request model
-│   │   ├── response.py                # Pydantic response model
-│   │   └── __init__.py
-│   ├── services/
-│   │   ├── preprocessing/
-│   │   │   ├── query_preprocessor.py  # Layer 2
-│   │   │   └── __init__.py
-│   │   ├── retrieval/
-│   │   │   ├── wikipedia_retriever.py # Layer 3a
-│   │   │   ├── serp_retriever.py      # Layer 3b
-│   │   │   ├── source_router.py       # Layer 3c
-│   │   │   ├── evidence_aggregator.py # Layer 3d
-│   │   │   └── __init__.py
-│   │   ├── judge/
-│   │   │   ├── llm_judge.py           # Layer 4
-│   │   │   └── __init__.py
-│   │   └── __init__.py
-│   ├── utils/
-│   │   ├── cache.py                   # Caching utilities
-│   │   └── __init__.py
-│   └── __init__.py
-├── main.py                            # FastAPI entrypoint
-├── requirements.txt                   # Dependencies
-├── .env.example                       # Environment template
-└── README.md                          # This file
+┌─────────────────┐     ┌─────────────────────────────────────────────┐
+│ Chrome Extension│     │              FastAPI Backend                 │
+│   (popup.js)    │────▶│                                             │
+│   (content.js)  │     │  ┌─────────┐   ┌───────────┐   ┌─────────┐ │
+│   (background.js│  POST│  │ Layer 1 │──▶│  Layer 2  │──▶│ Layer 3 │ │
+└─────────────────┘ /verify│  │  API    │   │Preprocessor│  │Retrieval│ │
+                         │  └─────────┘   └───────────┘   └────┬────┘ │
+                         │                                      │      │
+                         │  ┌─────────┐   ┌───────────┐        ▼      │
+                         │  │ Layer 5 │◀──│  Layer 4  │◀── Wikipedia  │
+                         │  │Response │   │Gemini Judge│◀── SerpAPI   │
+                         │  └─────────┘   └───────────┘               │
+                         └─────────────────────────────────────────────┘
 ```
 
-## Getting Started
+## Quick Start
 
-### 1. Clone & Setup
+### 1. Clone & Install Dependencies
+
 ```bash
-git clone <repo-url>
-cd ai-hallucination-detection
-```
+git clone <your-repo>
+cd AI-Hallucination-Risk-Assessment
 
-### 2. Install Dependencies
-```bash
+# Create virtual environment (recommended)
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+
+# Install dependencies
 pip install -r requirements.txt
 ```
 
+### 2. Get FREE Gemini API Key
+
+1. Go to [Google AI Studio](https://aistudio.google.com/app/apikey)
+2. Sign in with your Google account
+3. Click "Create API Key"
+4. Copy the key
+
 ### 3. Configure Environment
+
 ```bash
-cp .env.example .env
-# Edit .env and fill in your API keys:
-# - LLM_API_KEY (OpenAI, Anthropic, etc.)
-# - SERPAPI_KEY (for web search)
+# Copy example env file
+copy .env.example .env  # On Mac/Linux: cp .env.example .env
+
+# Edit .env and add your API keys:
+# - GEMINI_API_KEY (required): Your FREE Gemini API key
+# - SERPAPI_KEY (optional): For web search verification
 ```
 
-### 4. Run the Backend
+### 4. Start the Backend
+
 ```bash
 python main.py
 ```
 
-Server will start at `http://localhost:8000`
+Server starts at `http://localhost:8000`
 
-Visit API docs: `http://localhost:8000/docs` (Swagger UI)
+API Docs: `http://localhost:8000/docs`
 
-### 5. Test the Endpoint
+### 5. Install Chrome Extension
+
+1. Open Chrome and go to `chrome://extensions/`
+2. Enable "Developer mode" (toggle in top right)
+3. Click "Load unpacked"
+4. Select the `chrome-extension` folder
+
+### 6. Test the System
+
+**Via API:**
+
 ```bash
 curl -X POST "http://localhost:8000/api/verify" \
   -H "Content-Type: application/json" \
   -d '{
     "question": "What is the capital of France?",
-    "answer": "The capital of France is Paris, located on the Seine River."
+    "answer": "The capital of France is Paris."
   }'
 ```
 
-Expected response:
-```json
-{
-  "score": 85,
-  "verdict": "accurate",
-  "explanation": "Verified against Wikipedia. Paris is indeed the capital of France.",
-  "flag": false,
-  "sources_used": ["Wikipedia"]
-}
+**Via Extension:**
+
+1. Select any AI-generated text on a webpage
+2. Right-click → "Check for Hallucination"
+3. Or click the extension icon and paste text
+
+## Project Structure
+
+```
+AI-Hallucination-Risk-Assessment/
+├── app/
+│   ├── api/routes/
+│   │   └── verify.py              # API endpoint
+│   ├── core/
+│   │   ├── config.py              # Settings
+│   │   └── logging.py             # Logger
+│   ├── models/
+│   │   ├── request.py             # Input validation
+│   │   └── response.py            # Output formatting
+│   └── services/
+│       ├── preprocessing/
+│       │   └── query_preprocessor.py   # Claim extraction
+│       ├── retrieval/
+│       │   ├── wikipedia_retriever.py  # Wikipedia API
+│       │   ├── serp_retriever.py       # Google Search API
+│       │   ├── source_router.py        # Query routing
+│       │   └── evidence_aggregator.py  # Evidence processing
+│       └── judge/
+│           └── llm_judge.py            # Gemini verification
+├── chrome-extension/
+│   ├── manifest.json
+│   ├── popup.html
+│   ├── popup.js
+│   ├── content.js
+│   ├── background.js
+│   └── icons/
+├── main.py                        # FastAPI app
+├── requirements.txt
+├── .env.example
+└── README.md
 ```
 
-## Implementation Roadmap
+## API Reference
 
-### Phase 1: Core Pipeline (MVP)
-- [x] Basic folder structure
-- [ ] Layer 1: API Gateway (input validation done, coordinate pipeline)
-- [ ] Layer 4: LLM Judge (basic version, no evidence first)
-- [ ] Layer 5: Response formatting
-- [ ] Basic testing with Postman
+### POST /api/verify
 
-### Phase 2: Evidence Retrieval
-- [ ] Layer 2: Query Preprocessor (claim extraction)
-- [ ] Layer 3a: Wikipedia integration
-- [ ] Layer 3b: SerpAPI integration
-- [ ] Layer 3c: Source Router
-- [ ] Layer 3d: Evidence Aggregator
+Verify if an AI answer contains hallucinations.
 
-### Phase 3: Production Hardening
-- [ ] Caching layer (Redis or in-memory)
-- [ ] Error handling & logging
-- [ ] Rate limiting
-- [ ] Batch processing
-- [ ] Monitoring & metrics
+**Request:**
 
-## Todo List by Layer
-
-Each file contains `TODO` comments marking implementation points.
-
-### Layer 1: API Gateway (`app/api/routes/verify.py`)
-- ✅ Route structure defined
-- ✅ Pydantic validation
-- ✅ Pipeline orchestration
-- [ ] Error handling refinement
-
-### Layer 2: Query Preprocessor (`app/services/preprocessing/query_preprocessor.py`)
-- [ ] Implement `extract_claims()` - use small LLM or regex
-- [ ] Implement `determine_query_type()` - classify query for routing
-
-### Layer 3a: Wikipedia Retriever (`app/services/retrieval/wikipedia_retriever.py`)
-- [ ] Install `wikipedia-api` library
-- [ ] Implement `search()` - call Wikipedia API
-- [ ] Extract first 2 paragraphs as evidence
-
-### Layer 3b: SerpAPI Retriever (`app/services/retrieval/serp_retriever.py`)
-- [ ] Install `google-search-results` library
-- [ ] Implement `search()` - call SerpAPI
-- [ ] Extract top 3 snippets as evidence
-
-### Layer 3c: Source Router (`app/services/retrieval/source_router.py`)
-- ✅ Routing rules defined
-- [ ] Implement `retrieve_evidence()` - call appropriate retrievers
-
-### Layer 3d: Evidence Aggregator (`app/services/retrieval/evidence_aggregator.py`)
-- [ ] Implement `deduplicate()` - remove duplicate snippets
-- [ ] Implement `rank_evidence()` - prioritize best evidence
-- [ ] Implement `trim_to_budget()` - fit within token limit
-
-### Layer 4: LLM Judge (`app/services/judge/llm_judge.py`)
-- ✅ Prompt template defined
-- [ ] Initialize LLM client (OpenAI, Anthropic, etc.)
-- [ ] Implement `judge()` - make API call, parse response
-
-### Layer 5: Response Builder (`app/models/response.py`)
-- ✅ Mapping logic defined (score ranges to verdicts)
-- ✅ `from_judge_response()` implemented
-- [ ] Test with various score ranges
-
-## Key Design Decisions
-
-### Why Evidence-Grounded Judging?
-- Pure GPT-as-Judge has hallucination risk
-- Grounding judge in retrieved evidence reduces false positives
-- Wikipedia + SerpAPI provide diverse, reliable sources
-
-### How to Handle Unverifiable Claims?
-*Currently: Return score=50 with "unverifiable" verdict*
-- Alternative: Treat absence of evidence as hallucination risk
-- Recommendation: Start with neutral, adjust based on user feedback
-
-### Single Score vs. Per-Claim Scores?
-*Currently: Single score for entire answer*
-- Simpler UI, easier to understand
-- Per-claim scores: More precise, but harder to aggregate
-
-## Environment Variables
-
-| Variable | Description | Example |
-|----------|-------------|---------|
-| `LLM_API_KEY` | API key for LLM provider | `sk-...` |
-| `LLM_MODEL` | Model to use | `gpt-4` |
-| `LLM_API_BASE` | LLM API endpoint | `https://api.openai.com/v1` |
-| `SERPAPI_KEY` | SerpAPI key for web search | `abc123...` |
-| `WIKIPEDIA_API_ENABLED` | Enable Wikipedia retrieval | `true` |
-| `CACHE_ENABLED` | Enable caching | `true` |
-| `MAX_EVIDENCE_TOKENS` | Token limit for evidence | `800` |
-
-## API Endpoints
-
-### POST /verify
-Verify if an answer contains hallucinations.
-
-**Request**:
 ```json
 {
   "question": "What is the capital of France?",
-  "answer": "The capital of France is Paris, on the Seine River."
+  "answer": "The capital of France is Paris, located on the Seine River."
 }
 ```
 
-**Response**:
+**Response:**
+
 ```json
 {
   "score": 85,
   "verdict": "accurate",
-  "explanation": "Verified against Wikipedia.",
+  "explanation": "Verified against Wikipedia. Paris is confirmed as the capital of France.",
   "flag": false,
-  "sources_used": ["Wikipedia"]
+  "sources_used": ["wikipedia"]
 }
 ```
 
-**Score Ranges**:
-- 75-100: ✅ Likely accurate
-- 40-74: ⚠️ Uncertain, verify
-- 0-39: 🚩 High hallucination risk
+**Score Interpretation:**
+| Score Range | Verdict | Meaning |
+|-------------|---------|---------|
+| 75-100 | accurate | Verified by evidence |
+| 40-74 | uncertain | Partially verified, manual check recommended |
+| 0-39 | hallucination | Contradicted or unsupported by evidence |
 
-### GET /health
+### GET /api/health
+
 Health check endpoint.
 
-**Response**:
 ```json
-{
-  "status": "ok",
-  "service": "hallucination-detection"
-}
+{ "status": "ok", "service": "hallucination-detection" }
 ```
 
-## Logging
+## Configuration
 
-All modules use `app.core.logging.get_logger()` for consistent logging.
+### Environment Variables
 
-Enable debug logs:
-```bash
-# In .env
-APP_DEBUG=true
-```
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `GEMINI_API_KEY` | Yes | - | Google Gemini API key (FREE!) |
+| `GEMINI_MODEL` | No | `gemini-1.5-flash` | Model for verification |
+| `SERPAPI_KEY` | No | - | For web search (optional) |
+| `DEBUG` | No | `false` | Enable debug mode |
+| `PORT` | No | `8000` | Server port |
 
-## Testing
+### Supported Gemini Models (All FREE!)
 
-### Manual Testing with curl
-```bash
-curl -X POST "http://localhost:8000/api/verify" \
-  -H "Content-Type: application/json" \
-  -d '{"question": "Who is the president of USA?", "answer": "Joe Biden"}'
-```
+- `gemini-1.5-flash` (recommended - fast & free)
+- `gemini-1.5-pro` (more capable, still free)
+- `gemini-pro` (older version)
 
-### Automated Tests
-```bash
-# TODO: Add pytest tests
-pytest tests/
-```
+## How It Works
 
-## Contributing
+### Query Type Detection
 
-### Code Style
-- Follow PEP 8
-- Use type hints
-- Add docstrings to all functions
-- Add TODOs with layer numbers
+The system automatically classifies queries:
 
-### Adding New Retrievers
-1. Create new file in `app/services/retrieval/`
-2. Implement retriever class with `search()` method
-3. Update `SourceRouter` to include new retriever
-4. Add configuration to `.env.example`
+| Type | Routes To | Example |
+|------|-----------|---------|
+| encyclopedic | Wikipedia | "When was Einstein born?" |
+| recent_event | SerpAPI → Wikipedia | "What happened in 2024 elections?" |
+| numeric_statistical | Both | "What is the population of Tokyo?" |
+| opinion_subjective | Skip retrieval | "Is Python a good language?" |
 
-### Adding New LLM Providers
-1. Modify `app/services/judge/llm_judge.py`
-2. Initialize new LLM client
-3. Update prompt if needed
-4. Test with existing endpoints
+### Verification Pipeline
+
+1. **Preprocessing**: Extract key claims from the answer
+2. **Routing**: Determine which sources to query
+3. **Retrieval**: Fetch evidence from Wikipedia/SerpAPI
+4. **Aggregation**: Deduplicate, rank, and trim evidence
+5. **Judging**: Gemini evaluates answer against evidence
+6. **Response**: Format user-friendly result
+
+## Chrome Extension Usage
+
+### Popup Mode
+
+1. Click extension icon
+2. Paste or select text
+3. Click "Verify Facts"
+
+### Context Menu Mode
+
+1. Select text on any webpage
+2. Right-click → "Check for Hallucination"
+3. Result appears as overlay on page
+
+### Keyboard Shortcut
+
+- `Ctrl+Enter` in popup to verify
 
 ## Troubleshooting
 
-### "LLM API key not configured"
-- Check `.env` file exists
-- Verify `LLM_API_KEY` is set
-- Run: `python -c "from app.core.config import get_settings; print(get_settings().llm_api_key)"`
+### "Cannot connect to server"
 
-### Wikipedia API returns empty results
-- Check `WIKIPEDIA_API_ENABLED=true` in `.env`
-- Verify claim extraction is working (check logs)
-- Try different search terms
+- Ensure backend is running: `python main.py`
+- Check port 8000 is not in use
+
+### "Gemini API key not configured"
+
+- Create `.env` file from `.env.example`
+- Add your Gemini API key from [AI Studio](https://aistudio.google.com/app/apikey)
 
 ### Score always 50
-- Judge likely not implemented yet
-- Check `app/services/judge/llm_judge.py` for TODOs
-- Verify LLM API is configured and working
 
-## Resources
+- Gemini API key missing or invalid
+- Check logs for API errors
 
-- [FastAPI Docs](https://fastapi.tiangolo.com/)
-- [Pydantic Docs](https://docs.pydantic.dev/)
-- [Wikipedia API](https://pypi.org/project/wikipedia-api/)
-- [SerpAPI Docs](https://serpapi.com/docs)
-- [OpenAI API](https://platform.openai.com/docs)
+### Wikipedia returns no results
+
+- Try more specific search terms
+- Check internet connection
+
+## Cost Considerations
+
+| Component | Cost |
+|-----------|------|
+| Wikipedia API | FREE |
+| Google Gemini | FREE |
+| SerpAPI | ~$0.01-0.05/search (100 free/month) |
+
+**Total Cost: $0** (without SerpAPI)
 
 ## License
 
-[Add your license here]
+MIT License - see LICENSE file
+
+## Contributing
+
+1. Fork the repository
+2. Create feature branch
+3. Make changes
+4. Submit pull request
+
+## Credits
+
+Built with:
+
+- [FastAPI](https://fastapi.tiangolo.com/)
+- [Wikipedia-API](https://pypi.org/project/wikipedia-api/)
+- [Google Gemini](https://ai.google.dev/)
+- [SerpAPI](https://serpapi.com/)

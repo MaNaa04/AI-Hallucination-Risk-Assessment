@@ -9,33 +9,32 @@ from functools import lru_cache
 
 class Settings(BaseSettings):
     """Application configuration loaded from environment variables."""
-    
+
     # API Configuration
     app_name: str = "AI Hallucination Detection Backend"
     app_version: str = "0.1.0"
     debug: bool = False
-    
+
     # Server
     host: str = "0.0.0.0"
     port: int = 8000
-    
-    # LLM Configuration
-    llm_api_key: str = ""
-    llm_model: str = "gpt-4"
-    llm_api_base: str = "https://api.openai.com/v1"
-    
+
+    # Groq Configuration (FREE & FAST!)
+    groq_api_key: str = ""
+    groq_model: str = "llama-3.3-70b-versatile"  # Current active model
+
     # External API Keys
     serpapi_key: str = ""
     wikipedia_api_enabled: bool = True
-    
+
     # Caching
     cache_enabled: bool = True
     cache_ttl_seconds: int = 3600
-    
+
     # Evidence Configuration
     max_evidence_tokens: int = 800
     max_claims_per_request: int = 3
-    
+
     class Config:
         env_file = ".env"
         case_sensitive = False

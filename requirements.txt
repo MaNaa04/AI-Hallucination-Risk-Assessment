@@ -5,13 +5,11 @@ pydantic-settings==2.1.0
 python-dotenv==1.0.0
 
 # External APIs
-wikipedia-api==1.0.0
-google-search-results==2.4.3
+wikipedia-api==0.6.0
+google-search-results==2.4.2
 
-# LLM Clients (choose based on your provider)
-openai>=1.3.0
-anthropic>=0.7.0
-# Or other LLM clients as needed
+# Groq API (FREE & FAST!) - uses OpenAI-compatible client
+openai>=1.0.0
 
 # Optional: Caching
 redis==5.0.1
