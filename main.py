@@ -17,7 +17,7 @@ app = FastAPI(
     title=settings.app_name,
     version=settings.app_version,
     description="Backend for AI Hallucination Detection System",
-    debug=settings.debug
+    debug=settings.app_debug
 )
 
 # Add CORS middleware for extension communication
@@ -37,7 +37,7 @@ app.include_router(verify_router)
 async def startup_event():
     """Run on application startup."""
     logger.info(f"Starting {settings.app_name} v{settings.app_version}")
-    logger.info(f"Debug mode: {settings.debug}")
+    logger.info(f"Debug mode: {settings.app_debug}")
 
 
 @app.on_event("shutdown")
@@ -62,5 +62,5 @@ if __name__ == "__main__":
         app,
         host=settings.host,
         port=settings.port,
-        reload=settings.debug
+        reload=settings.app_debug
     )
