@@ -54,7 +54,40 @@ Visit **http://localhost:8000/docs** for Swagger UI.
 
 ### Expected Output (Stubs Active)
 
-Since Layers 2-4 are stubs, valid requests return:
-- `score: 50`, `verdict: "uncertain"` (neutral default)
+Since Layers 3-4 are stubs, valid requests return:
+- `score: 50`, `verdict: "uncertain"` (neutral default from stub judge)
 - `request_id` (UUID) and `processing_time_ms`
-- Server logs show each pipeline step with timing
+- Server logs show claim extraction and query type from Layer 2
+
+---
+
+## Layer 2: Query Preprocessor
+
+### Automated Tests
+
+```bash
+python -m pytest tests/test_preprocessor.py -v
+```
+
+**Expected**: 24 tests pass (9 extraction + 12 query type + 3 pipeline)
+
+### Quick Manual Test
+
+```bash
+python -c "
+from app.services.preprocessing.query_preprocessor import QueryPreprocessor
+
+# Test claim extraction
+claims = QueryPreprocessor.extract_claims(
+    'Paris is the capital of France. It is located along the Seine River. The city has over 2 million residents.'
+)
+print('Claims:', claims)
+
+# Test query type detection
+print('Type:', QueryPreprocessor.determine_query_type('What is the capital of France?'))
+print('Type:', QueryPreprocessor.determine_query_type('What happened today in politics?'))
+print('Type:', QueryPreprocessor.determine_query_type('How many countries are in the EU?'))
+print('Type:', QueryPreprocessor.determine_query_type('Should I learn Python or JavaScript?'))
+"
+```
+
