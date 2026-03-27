@@ -13,7 +13,7 @@ class Settings(BaseSettings):
     # API Configuration
     app_name: str = "AI Hallucination Detection Backend"
     app_version: str = "0.1.0"
-    debug: bool = False
+    app_debug: bool = False
     
     # Server
     host: str = "0.0.0.0"
@@ -40,6 +40,7 @@ class Settings(BaseSettings):
     class Config:
         env_file = ".env"
         case_sensitive = False
+        extra = "ignore"
 
 
 @lru_cache()

@@ -52,6 +52,22 @@ class LLMJudge:
                 self.client = OpenAI(api_key=self.api_key)
                 logger.info(f"Initialized OpenAI judge with model: {self.model}")
 
+            elif self.provider == "grok":
+                from openai import OpenAI
+                self.client = OpenAI(
+                    api_key=self.api_key,
+                    base_url="https://api.x.ai/v1",
+                )
+                logger.info(f"Initialized Grok/xAI judge with model: {self.model}")
+
+            elif self.provider == "groq":
+                from openai import OpenAI
+                self.client = OpenAI(
+                    api_key=self.api_key,
+                    base_url="https://api.groq.com/openai/v1",
+                )
+                logger.info(f"Initialized Groq judge with model: {self.model}")
+
             else:
                 logger.error(f"Unknown LLM provider: {self.provider}")
 
@@ -161,14 +177,69 @@ Only use information from the evidence provided. If the evidence is empty or doe
             flag=data.get("flag", score < 60),
         )
 
+    @staticmethod
+    def _heuristic_judge(question: str, answer: str, evidence: str) -> JudgeResponse:
+        """
+        Fallback: heuristic keyword-overlap judge.
+
+        Used when LLM API is unavailable (quota, network, no key).
+        Compares answer keywords against evidence to estimate accuracy.
+        """
+        if not evidence or evidence.strip() == "":
+            return JudgeResponse(
+                score=50,
+                verdict="unverifiable",
+                explanation="No evidence available to verify this claim.",
+                flag=False,
+            )
+
+        # Extract meaningful words (>3 chars, lowercased)
+        import re as _re
+        answer_words = set(
+            w for w in _re.findall(r'\b\w+\b', answer.lower())
+            if len(w) > 3
+        )
+        evidence_lower = evidence.lower()
+
+        if not answer_words:
+            return JudgeResponse(
+                score=50,
+                verdict="unverifiable",
+                explanation="Answer too short to analyze.",
+                flag=False,
+            )
+
+        # Count how many answer keywords appear in the evidence
+        matches = sum(1 for w in answer_words if w in evidence_lower)
+        overlap = matches / len(answer_words)
+
+        # Map overlap to score (0.0 → 30, 0.5 → 65, 1.0 → 92)
+        score = int(30 + (overlap * 62))
+        score = max(0, min(100, score))
+
+        if score >= 70:
+            verdict = "verified"
+            explanation = f"Heuristic check: {matches}/{len(answer_words)} key terms found in evidence."
+        elif score >= 45:
+            verdict = "unverifiable"
+            explanation = f"Heuristic check: partial match — {matches}/{len(answer_words)} key terms found."
+        else:
+            verdict = "likely_hallucination"
+            explanation = f"Heuristic check: low match — only {matches}/{len(answer_words)} key terms found in evidence."
+
+        return JudgeResponse(
+            score=score,
+            verdict=verdict,
+            explanation=explanation,
+            flag=score < 60,
+        )
+
     def judge(self, question: str, answer: str, evidence: str) -> JudgeResponse:
         """
         Judge the answer based on evidence.
 
-        1. Build prompt with question, answer, evidence
-        2. Call LLM API (Gemini or OpenAI)
-        3. Parse JSON response
-        4. Return JudgeResponse
+        1. Try LLM API (Gemini or OpenAI)
+        2. On any failure, fall back to heuristic keyword-overlap judge
 
         Args:
             question: Original question
@@ -179,22 +250,12 @@ Only use information from the evidence provided. If the evidence is empty or doe
             Judge's assessment as JudgeResponse
         """
         if not self.api_key or self.api_key in ("your_llm_api_key_here", ""):
-            logger.warning("LLM API key not configured, returning neutral verdict")
-            return JudgeResponse(
-                score=50,
-                verdict="unverifiable",
-                explanation="LLM judge not configured. Add LLM_API_KEY to .env file.",
-                flag=False,
-            )
+            logger.warning("LLM API key not configured, using heuristic judge")
+            return self._heuristic_judge(question, answer, evidence)
 
         if not self.client:
-            logger.error("LLM client not initialized")
-            return JudgeResponse(
-                score=50,
-                verdict="unverifiable",
-                explanation="LLM client initialization failed.",
-                flag=False,
-            )
+            logger.error("LLM client not initialized, using heuristic judge")
+            return self._heuristic_judge(question, answer, evidence)
 
         prompt = self.build_judge_prompt(question, answer, evidence)
         logger.info(f"Calling {self.provider} judge (model: {self.model})")
@@ -202,7 +263,7 @@ Only use information from the evidence provided. If the evidence is empty or doe
         try:
             if self.provider == "gemini":
                 raw_response = self._call_gemini(prompt)
-            elif self.provider == "openai":
+            elif self.provider in ("openai", "grok", "groq"):
                 raw_response = self._call_openai(prompt)
             else:
                 raise ValueError(f"Unknown provider: {self.provider}")
@@ -212,17 +273,8 @@ Only use information from the evidence provided. If the evidence is empty or doe
 
         except json.JSONDecodeError as e:
             logger.error(f"Failed to parse LLM JSON response: {e}", exc_info=True)
-            return JudgeResponse(
-                score=50,
-                verdict="unverifiable",
-                explanation="Failed to parse judge response.",
-                flag=False,
-            )
+            return self._heuristic_judge(question, answer, evidence)
         except Exception as e:
-            logger.error(f"LLM judge call failed: {e}", exc_info=True)
-            return JudgeResponse(
-                score=50,
-                verdict="unverifiable",
-                explanation=f"Judge error: {str(e)[:100]}",
-                flag=False,
-            )
+            logger.error(f"LLM judge call failed: {e}, falling back to heuristic judge")
+            return self._heuristic_judge(question, answer, evidence)
+
