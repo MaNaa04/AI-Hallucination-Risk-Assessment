@@ -3,6 +3,7 @@ Wikipedia Retrieval - Layer 3
 Retrieves factual/encyclopedic information from Wikipedia API.
 """
 
+import re
 import wikipediaapi
 from typing import Optional
 from app.core.logging import get_logger
@@ -95,39 +96,77 @@ class WikipediaRetriever:
 
         words = query.split()
 
-        # Extract capitalized words (proper nouns) - these are often Wikipedia articles
+        # Extract year if present (important for event searches)
+        year = None
+        for word in words:
+            if re.match(r'\b(19|20)\d{2}\b', word):
+                year = word
+                break
+
+        # Extract capitalized words (proper nouns) - often Wikipedia articles
         capitalized = [w.strip('.,!?()[]') for w in words
                        if w and w[0].isupper() and w.lower() not in stop_words]
+
+        # Extract important keywords (verbs converted to nouns)
+        keyword_map = {
+            'demonetized': 'demonetisation',
+            'demonetization': 'demonetisation',
+            'won': 'winner',
+            'elected': 'election',
+            'happened': 'event',
+        }
+
+        # Build search variations
         if capitalized:
-            # Try each capitalized word individually
-            for word in capitalized:
+            # Try country/entity + event keyword + year
+            if year and len(capitalized) >= 1:
+                for base in capitalized[:2]:
+                    variations.append(f"{year} {base}")
+                    variations.append(f"{base} {year}")
+
+            # Try proper nouns alone
+            for word in capitalized[:3]:
                 if len(word) > 1:
                     variations.append(word)
+
             # Try combinations
             if len(capitalized) >= 2:
                 variations.append(" ".join(capitalized[:2]))
+                if year:
+                    variations.append(f"{' '.join(capitalized[:2])} {year}")
+
+        # Convert action words to Wikipedia article topics
+        for word, replacement in keyword_map.items():
+            if word in query.lower():
+                if capitalized:
+                    # "India demonetized" -> "Indian demonetisation"
+                    country = capitalized[0] if capitalized else ""
+                    variations.append(f"{country} {replacement}")
+                    if year:
+                        variations.append(f"{year} {country} {replacement}")
+                else:
+                    variations.append(replacement)
 
         # Extract non-stop words for keyword search
         keywords = [w.strip('.,!?()[]') for w in words
                     if w.lower() not in stop_words and len(w) > 2]
-        if keywords:
-            # Try first significant keyword
-            variations.append(keywords[0].title())
-            # Try first two keywords
-            if len(keywords) >= 2:
-                variations.append(f"{keywords[0]} {keywords[1]}".title())
+        if keywords and len(keywords) >= 2:
+            # Try first two significant keywords
+            variations.append(f"{keywords[0]} {keywords[1]}".title())
 
-        # Title case of original
+        # Title case of original (last resort)
         variations.append(query.title())
 
         # Remove duplicates while preserving order
         seen = set()
         unique_variations = []
         for v in variations:
-            if v.lower() not in seen and v:
-                seen.add(v.lower())
-                unique_variations.append(v)
+            v_clean = v.strip()
+            if v_clean and v_clean.lower() not in seen:
+                seen.add(v_clean.lower())
+                unique_variations.append(v_clean)
 
+        logger.info(f"Search variations: {unique_variations[:5]}")  # Log for debugging
         return unique_variations
 
     def _extract_content(self, page: wikipediaapi.WikipediaPage, max_paragraphs: int) -> str:

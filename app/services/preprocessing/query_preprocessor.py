@@ -35,8 +35,10 @@ class QueryPreprocessor:
 
     # Patterns for query type detection
     RECENT_EVENT_PATTERNS = [
-        r'\b(today|yesterday|this week|this month|this year|202[3-9]|recent|latest|current|now)\b',
+        r'\b(today|yesterday|this week|this month|this year|recent|latest|current|now)\b',
         r'\b(news|announced|released|launched|happened|trending)\b',
+        r'\b(20[0-2][0-9])\b',  # Matches years 2000-2029 (events with years should use web search)
+        r'\b(winner|won|championship|election|olympics|world cup)\b',  # Sports/events keywords
     ]
 
     OPINION_PATTERNS = [
@@ -47,6 +49,7 @@ class QueryPreprocessor:
     NUMERIC_PATTERNS = [
         r'\b(how many|how much|what percentage|what number|statistics|data|count|total)\b',
         r'\b(\d+%|\d+\s*(million|billion|thousand))\b',
+        r'\b(dosage|dose|amount|quantity|mg|grams|litres|liters|temperature|degrees)\b',  # Medical/measurement
     ]
 
     @staticmethod
@@ -139,6 +142,25 @@ class QueryPreprocessor:
 
         # Clean up whitespace
         claim = ' '.join(claim.split())
+
+        # Extract key entities and concepts for better Wikipedia search
+        # Look for: Countries, years, proper nouns, important keywords
+
+        # Extract year if present (helps with Wikipedia search)
+        year_match = re.search(r'\b(19|20)\d{2}\b', claim)
+        year = year_match.group(0) if year_match else ""
+
+        # Extract proper nouns (capitalized words)
+        proper_nouns = re.findall(r'\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\b', claim)
+
+        # Build a better search query
+        if proper_nouns and year:
+            # Combine proper nouns with year for better search
+            search_terms = ' '.join(proper_nouns[:3]) + ' ' + year
+            claim = search_terms
+        elif proper_nouns:
+            # Use proper nouns
+            claim = ' '.join(proper_nouns[:3])
 
         # Limit length for search
         if len(claim) > 150:

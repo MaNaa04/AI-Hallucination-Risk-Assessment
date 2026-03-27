@@ -40,13 +40,13 @@ class SourceRouter:
             List of source names to query
         """
         routing_rules = {
-            "encyclopedic": ["wikipedia"],
+            "encyclopedic": ["wikipedia", "serpapi"],  # Use BOTH for better coverage
             "recent_event": ["serpapi", "wikipedia"],
-            "numeric_statistical": ["wikipedia", "serpapi"],
+            "numeric_statistical": ["serpapi", "wikipedia"],  # SerpAPI first for current data
             "opinion_subjective": [],  # Skip retrieval
         }
 
-        sources = routing_rules.get(query_type, ["wikipedia"])
+        sources = routing_rules.get(query_type, ["serpapi", "wikipedia"])  # Default to both
         logger.info(f"Routing query type '{query_type}' to sources: {sources}")
         return sources
 

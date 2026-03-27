@@ -43,8 +43,9 @@ class SerpAPIRetriever:
             - 'found': True if results found
         """
         if not self.api_key:
-            logger.warning("SerpAPI key not configured, skipping search")
-            return {"found": False, "results": [], "search_metadata": None}
+            logger.error("⚠️ SerpAPI key not configured! Get free key at https://serpapi.com")
+            logger.error("⚠️ Add SERPAPI_KEY to .env file for web search support")
+            return {"found": False, "results": [], "search_metadata": None, "error": "No API key"}
 
         logger.info(f"Searching SerpAPI for: {query}")
 
