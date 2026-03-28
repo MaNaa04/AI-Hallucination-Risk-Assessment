@@ -4,6 +4,7 @@ Extracts key factual claims from answers and determines query type.
 """
 
 import re
+import time
 from typing import Literal
 from dataclasses import dataclass
 from app.core.logging import get_logger
@@ -21,6 +22,10 @@ class ProcessedQuery:
     original_answer: str
     extracted_claims: list[str]
     query_type: QueryType
+    # Analytics metadata
+    sentences_found: int = 0
+    factual_sentences: int = 0
+    preprocessing_time_ms: int = 0
 
 
 # ── Patterns for query type detection ─────────────────────────────
@@ -161,15 +166,12 @@ class QueryPreprocessor:
         return claim
 
     @staticmethod
-    def extract_claims(answer: str, max_claims: int = 3) -> list[str]:
+    async def extract_claims_async(answer: str, max_claims: int = 3) -> list[str]:
         """
-        Extract key factual claims from the answer.
+        Extract key factual claims from the answer asynchronously.
 
-        Uses heuristic approach:
-        1. Split answer into sentences
-        2. Filter out non-factual sentences
-        3. Clean into concise search queries
-        4. Return up to max_claims results
+        Uses LLM-based Atomic Knowledge Triplet extraction first.
+        If it fails, falls back to heuristic approach.
 
         Args:
             answer: The AI-generated answer
@@ -187,13 +189,36 @@ class QueryPreprocessor:
             logger.warning("Answer too short for claim extraction")
             return []
 
+        # Step 0: Try LLM-based Triplets Extraction
+        try:
+            from app.services.judge.llm_judge import LLMJudge
+            judge = LLMJudge()
+            triplets = await judge.extract_triplets(answer)
+            if triplets:
+                claims = []
+                for t in triplets:
+                    subject = t.get("subject", "")
+                    predicate = t.get("predicate", "")
+                    obj = t.get("object", "")
+                    if subject and predicate and obj:
+                        claims.append(f"{subject} {predicate} {obj}")
+                
+                if claims:
+                    # Return top claims
+                    result = claims[:max_claims]
+                    logger.info(f"Extracted {len(result)} claims via LLM Triplets")
+                    return result
+        except Exception as e:
+            logger.error(f"LLM Triplet extraction failed: {e}, falling back to heuristic")
+
+        # Fallback Heuristic Approach
         # Step 1: Split into sentences
         sentences = QueryPreprocessor._split_sentences(answer)
-        logger.info(f"Split answer into {len(sentences)} sentences")
+        logger.info(f"Fallback: Split answer into {len(sentences)} sentences")
 
         # Step 2: Filter for factual sentences
         factual = [s for s in sentences if QueryPreprocessor._is_factual_sentence(s)]
-        logger.info(f"Found {len(factual)} factual sentences")
+        logger.info(f"Fallback: Found {len(factual)} factual sentences")
 
         # Step 3: Clean into search queries
         claims = [QueryPreprocessor._clean_claim(s) for s in factual]
@@ -205,7 +230,7 @@ class QueryPreprocessor:
         claims.sort(key=len, reverse=True)
         result = claims[:max_claims]
 
-        logger.info(f"Extracted {len(result)} claims")
+        logger.info(f"Extracted {len(result)} claims via heuristic fallback")
         return result
 
     @staticmethod
@@ -252,23 +277,34 @@ class QueryPreprocessor:
         return "encyclopedic"
 
     @staticmethod
-    def preprocess(question: str, answer: str) -> ProcessedQuery:
+    async def preprocess_async(question: str, answer: str) -> ProcessedQuery:
         """
-        Full preprocessing pipeline.
+        Full async preprocessing pipeline.
 
         Args:
             question: Original question
             answer: AI-generated answer
 
         Returns:
-            Processed query with extracted claims and type
+            Processed query with extracted claims, type, and analytics metadata
         """
+        start = time.time()
+
+        # Split sentences and count for analytics
+        sentences = QueryPreprocessor._split_sentences(answer) if answer and len(answer.strip()) >= 10 else []
+        factual = [s for s in sentences if QueryPreprocessor._is_factual_sentence(s)]
+
         claims = QueryPreprocessor.extract_claims(answer)
         query_type = QueryPreprocessor.determine_query_type(question)
+
+        preprocessing_time_ms = int((time.time() - start) * 1000)
 
         return ProcessedQuery(
             original_question=question,
             original_answer=answer,
             extracted_claims=claims,
-            query_type=query_type
+            query_type=query_type,
+            sentences_found=len(sentences),
+            factual_sentences=len(factual),
+            preprocessing_time_ms=preprocessing_time_ms,
         )

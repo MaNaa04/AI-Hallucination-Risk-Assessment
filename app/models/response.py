@@ -76,6 +76,10 @@ class VerifyResponse(BaseModel):
         default=None,
         description="Total pipeline processing time in milliseconds"
     )
+    debug: Optional[dict] = Field(
+        default=None,
+        description="Debug info detailing exactly what evidence snippets were retrieved"
+    )
     
     @staticmethod
     def from_judge_response(
@@ -83,6 +87,7 @@ class VerifyResponse(BaseModel):
         sources: Optional[list[str]] = None,
         request_id: Optional[str] = None,
         processing_time_ms: Optional[int] = None,
+        debug: Optional[dict] = None,
     ) -> "VerifyResponse":
         """
         Convert LLM Judge response to user-facing response.
@@ -92,12 +97,14 @@ class VerifyResponse(BaseModel):
             sources: Sources used for evidence retrieval
             request_id: Unique request ID for tracing
             processing_time_ms: Pipeline processing time
+            debug: Detailed evidence snippets retrieved
             
         Returns:
             Formatted response with user-friendly verdict
         """
-        # Map judge verdict to user-friendly verdict based on score
-        if judge_resp.score >= 75:
+        # Map judge score to user-friendly verdict
+        # 70+  = accurate (verified), 40-69 = uncertain (unverifiable), <40 = hallucination
+        if judge_resp.score >= 70:
             verdict = "accurate"
         elif judge_resp.score >= 40:
             verdict = "uncertain"
@@ -112,6 +119,7 @@ class VerifyResponse(BaseModel):
             sources_used=sources,
             request_id=request_id,
             processing_time_ms=processing_time_ms,
+            debug=debug,
         )
     
     class Config:

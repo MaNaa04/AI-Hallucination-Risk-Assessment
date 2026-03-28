@@ -2,10 +2,14 @@
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import RedirectResponse
 from contextlib import asynccontextmanager
+import os
 from app.core.config import get_settings
 from app.core.logging import get_logger
 from app.api.routes.verify import router as verify_router
+from app.api.routes.analytics import router as analytics_router
 
 # Initialize logger
 logger = get_logger(__name__)
@@ -41,6 +45,17 @@ app.add_middleware(
 
 # Include routers
 app.include_router(verify_router)
+app.include_router(analytics_router)
+
+# Mount dashboard static files
+dashboard_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "dashboard")
+if os.path.exists(dashboard_dir):
+    app.mount("/dashboard", StaticFiles(directory=dashboard_dir, html=True), name="dashboard")
+
+# Mount analytics dashboard
+analytics_dashboard_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "analytics-dashboard")
+if os.path.exists(analytics_dashboard_dir):
+    app.mount("/analytics", StaticFiles(directory=analytics_dashboard_dir, html=True), name="analytics-dashboard")
 
 @app.get("/")
 async def root():
@@ -48,7 +63,8 @@ async def root():
     return {
         "name": settings.app_name,
         "version": settings.app_version,
-        "status": "running"
+        "status": "running",
+        "dashboard": "/dashboard"
     }
 
 
