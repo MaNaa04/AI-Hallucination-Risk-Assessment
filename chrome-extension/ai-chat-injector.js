@@ -222,6 +222,61 @@ function createRightPanel() {
       font-size: 13px;
     }
 
+    .hd-dashboard-link {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      margin-top: 16px;
+      padding: 10px 16px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      text-decoration: none;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      transition: all 0.2s ease;
+      cursor: pointer;
+      border: none;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+
+    .hd-dashboard-link:hover {
+      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.35);
+      transform: translateY(-1px);
+    }
+
+    .hd-dashboard-links {
+      display: flex;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .hd-dashboard-link-secondary {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 8px 14px;
+      background: #f1f3f4;
+      color: #5f6368;
+      text-decoration: none;
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 500;
+      transition: all 0.2s ease;
+      cursor: pointer;
+      border: 1px solid #dadce0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      flex: 1;
+      text-align: center;
+    }
+
+    .hd-dashboard-link-secondary:hover {
+      background: #e8eaed;
+      color: #202124;
+    }
+
     /* Responsive for smaller screens */
     @media (max-width: 1024px) {
       #hd-right-panel {
@@ -571,6 +626,15 @@ function showResultInPanel(data) {
         75-100: Highly reliable<br>
         50-74: Mixed reliability<br>
         0-49: Low reliability
+      </div>
+
+      <a href="http://localhost:8000/analytics" target="_blank" class="hd-dashboard-link">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"></rect><rect x="14" y="3" width="7" height="7" rx="1"></rect><rect x="3" y="14" width="7" height="7" rx="1"></rect><rect x="14" y="14" width="7" height="7" rx="1"></rect></svg>
+        Open Analytics Dashboard
+      </a>
+      <div class="hd-dashboard-links">
+        <a href="http://localhost:8000/dashboard" target="_blank" class="hd-dashboard-link-secondary">Basic Dashboard</a>
+        <a href="http://localhost:8000/docs" target="_blank" class="hd-dashboard-link-secondary">API Docs</a>
       </div>
     </div>
   `;
