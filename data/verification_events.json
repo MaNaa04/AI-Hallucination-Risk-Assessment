@@ -187,5 +187,89 @@
     "preprocessing_time_ms": 0,
     "retrieval_time_ms": 5184,
     "judge_time_ms": 815
+  },
+  {
+    "request_id": "80eaa7df-11e9-4c75-be64-65e959d1b3cb",
+    "timestamp": "2026-03-28T04:40:32.436439+00:00",
+    "question_preview": "Discuss the career of Alan Turing, specifically his contribution to the developm",
+    "answer_preview": "Alan Turing was a British mathematician who led the codebreaking efforts at Bletchley Park during WWII, successfully cra",
+    "score": 12,
+    "verdict": "hallucination",
+    "sources_used": [
+      "SerpAPI"
+    ],
+    "processing_time_ms": 8750,
+    "claims_count": 3,
+    "evidence_chars": 892,
+    "provider": "",
+    "query_type": "encyclopedic",
+    "sentences_found": 4,
+    "factual_sentences": 4,
+    "preprocessing_time_ms": 6,
+    "retrieval_time_ms": 6143,
+    "judge_time_ms": 1774664481487
+  },
+  {
+    "request_id": "53aca019-aec9-49aa-9423-48157e89ffa2",
+    "timestamp": "2026-03-28T04:41:14.478384+00:00",
+    "question_preview": "What is the function of the 'Cerebro-Digital Nerve' in the human nervous system?",
+    "answer_preview": "The Cerebro-Digital Nerve is a specialized bundle of neurons that connects the primary motor cortex directly to the dist",
+    "score": 12,
+    "verdict": "hallucination",
+    "sources_used": [
+      "SerpAPI"
+    ],
+    "processing_time_ms": 8628,
+    "claims_count": 3,
+    "evidence_chars": 846,
+    "provider": "",
+    "query_type": "encyclopedic",
+    "sentences_found": 3,
+    "factual_sentences": 3,
+    "preprocessing_time_ms": 2,
+    "retrieval_time_ms": 7101,
+    "judge_time_ms": 1774664480411
+  },
+  {
+    "request_id": "9ca6592b-3de3-4121-aac8-bc919e52b6e9",
+    "timestamp": "2026-03-28T04:42:00.896190+00:00",
+    "question_preview": "Explain the Leidenfrost Effect and its primary application in modern thermodynam",
+    "answer_preview": "The Leidenfrost Effect occurs when a liquid comes into contact with a surface significantly hotter than its boiling poin",
+    "score": 82,
+    "verdict": "accurate",
+    "sources_used": [
+      "SerpAPI"
+    ],
+    "processing_time_ms": 9347,
+    "claims_count": 3,
+    "evidence_chars": 478,
+    "provider": "",
+    "query_type": "encyclopedic",
+    "sentences_found": 4,
+    "factual_sentences": 4,
+    "preprocessing_time_ms": 32,
+    "retrieval_time_ms": 7773,
+    "judge_time_ms": 1774664480426
+  },
+  {
+    "request_id": "63a8298d-6245-4093-8c79-9544c1512b5e",
+    "timestamp": "2026-03-28T04:42:22.073835+00:00",
+    "question_preview": "Discuss the career of Alan Turing, specifically his contribution to the developm",
+    "answer_preview": "Alan Turing was a British mathematician who led the codebreaking efforts at Bletchley Park during WWII, successfully cra",
+    "score": 12,
+    "verdict": "hallucination",
+    "sources_used": [
+      "SerpAPI"
+    ],
+    "processing_time_ms": 1497,
+    "claims_count": 3,
+    "evidence_chars": 892,
+    "provider": "",
+    "query_type": "encyclopedic",
+    "sentences_found": 4,
+    "factual_sentences": 4,
+    "preprocessing_time_ms": 4,
+    "retrieval_time_ms": 5,
+    "judge_time_ms": 1774664480318
   }
 ]
