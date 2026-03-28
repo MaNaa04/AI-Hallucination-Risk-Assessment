@@ -234,6 +234,36 @@ class QueryPreprocessor:
         return result
 
     @staticmethod
+    def extract_claims(answer: str, max_claims: int = 3) -> list[str]:
+        """
+        Synchronous heuristic claim extraction (no LLM).
+        Splits sentences, filters factual ones, cleans into search queries.
+
+        Args:
+            answer: The AI-generated answer
+            max_claims: Maximum number of claims to return
+
+        Returns:
+            List of extracted claims as search queries
+        """
+        settings = get_settings()
+        max_claims = min(max_claims, settings.max_claims_per_request)
+
+        if not answer or len(answer.strip()) < 10:
+            logger.warning("Answer too short for claim extraction")
+            return []
+
+        sentences = QueryPreprocessor._split_sentences(answer)
+        factual = [s for s in sentences if QueryPreprocessor._is_factual_sentence(s)]
+        claims = [QueryPreprocessor._clean_claim(s) for s in factual]
+        claims = [c for c in claims if len(c) >= 10]
+        claims.sort(key=len, reverse=True)
+        result = claims[:max_claims]
+
+        logger.info(f"Extracted {len(result)} claims via heuristic (sync)")
+        return result
+
+    @staticmethod
     def determine_query_type(question: str) -> QueryType:
         """
         Determine the type of query for routing to appropriate retrievers.
