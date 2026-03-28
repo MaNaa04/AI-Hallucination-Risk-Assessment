@@ -1,12 +1,14 @@
 """
 Wikipedia Retrieval - Layer 3A
-Retrieves factual/encyclopedic information from Wikipedia API.
+Retrieves factual/encyclopedic information from Wikipedia API via async HTTPX.
 """
 
 import re
+import asyncio
+import httpx
 from typing import Optional
-import wikipediaapi
 from app.core.logging import get_logger
+from app.core.cache import get_cached, set_cached
 
 logger = get_logger(__name__)
 
@@ -14,44 +16,31 @@ logger = get_logger(__name__)
 class WikipediaRetriever:
     """
     Retrieves evidence from Wikipedia for encyclopedic claims.
-
-    Best for: named entities, historical facts, scientific concepts,
-    biographical info, places, organizations.
+    Uses strict 600ms timeouts and fuzzy fallback logic.
     """
 
     def __init__(self):
-        """Initialize Wikipedia retriever with API client."""
-        self.wiki = wikipediaapi.Wikipedia(
-            user_agent="AIHallucinationDetector/0.1 (academic project)",
-            language="en",
-        )
+        """Initialize Wikipedia retriever."""
+        self.base_url = "https://en.wikipedia.org/w/api.php"
+        # Strict timeout requirement from plan
+        self.timeout = 0.6 
 
     @staticmethod
     def _extract_search_terms(query: str) -> list[str]:
         """
-        Extract search terms from a claim/query.
-
-        Wikipedia API needs article titles, not full sentences.
-        Strategy:
-        1. Full query (sometimes works for exact article titles)
-        2. Named entities: year + acronym + noun combos ("2022 FIFA World Cup")
-        3. Capitalized proper nouns ("Argentina", "France")
-        4. Acronyms ("FIFA", "NATO", "NASA")
-
-        Args:
-            query: A claim like "The 2022 FIFA World Cup was won by Argentina"
-
-        Returns:
-            List of search terms to try
+        Extract search terms (Primary exact term -> Broader fuzzy keywords).
         """
         terms = []
-
         STOP_WORDS = {"The", "This", "That", "These", "Those", "Its", "His",
                        "Her", "Our", "Their", "Was", "Were", "Has", "Had",
-                       "Are", "Not", "And", "But", "For", "With"}
+                       "Are", "Not", "And", "But", "For", "With", "In"}
 
-        # Extract multi-word entities: sequences of capitalized/acronym words
-        # with optional year prefix. Matches "2022 FIFA World Cup", "United Nations"
+        # 1. Primary: exact phrase stripping punctuation
+        clean_query = re.sub(r'[^\w\s]', '', query).strip()
+        if clean_query:
+            terms.append(clean_query)
+
+        # 2. Extract multi-word entities (Fuzzy Keyword search)
         entities = re.findall(
             r'(?:\d{4}\s+)?(?:[A-Z][a-zA-Z]*\s+)*[A-Z][a-zA-Z]*', query
         )
@@ -59,103 +48,132 @@ class WikipediaRetriever:
             entity = entity.strip()
             if entity not in terms and len(entity) > 2 and entity not in STOP_WORDS:
                 terms.append(entity)
-
-        # Sort entities: multi-word first (more specific = better Wikipedia match)
-        terms.sort(key=lambda t: len(t.split()), reverse=True)
-
-        # Extract individual capitalized words (proper nouns)
+                
+        # 3. Last resort fuzzy keyword: Capitalized proper nouns
         capitalized = re.findall(r'\b[A-Z][a-z]+\b', query)
         for term in capitalized:
             if term not in terms and len(term) > 2 and term not in STOP_WORDS:
                 terms.append(term)
+                
+        # Make sure we have something
+        if not terms:
+            terms = [clean_query]
 
-        # Extract acronyms (all-caps words, 2+ chars)
-        acronyms = re.findall(r'\b[A-Z]{2,}\b', query)
-        for acr in acronyms:
-            if acr not in terms:
-                terms.append(acr)
+        return terms
 
-        return terms if terms else [query]
-
-    def search(self, query: str, max_results: int = 2) -> dict:
+    def _extract_top_2_snippets(self, text: str, query: str) -> str:
         """
-        Search Wikipedia for a claim.
-
-        Tries multiple search terms extracted from the query:
-        full query first, then proper nouns, then key terms.
-
-        Args:
-            query: Search query/extracted claim
-            max_results: Number of paragraph sections to extract
-
-        Returns:
-            Dictionary with title, content, url, relevance_score, found
+        Slice evidence to Top 2 snippets/sentences for tiny LLM Context.
         """
-        logger.info(f"Searching Wikipedia for: {query}")
+        sentences = re.split(r'(?<=[.!?])\s+', text)
+        sentences = [s.strip() for s in sentences if len(s.strip()) > 15]
+        
+        if not sentences:
+            return ""
+            
+        # Score sentences by keyword overlap with query
+        query_words = set(query.lower().split())
+        scored = []
+        for s in sentences:
+            s_lower = s.lower()
+            score = sum(1 for w in query_words if w in s_lower)
+            scored.append((score, s))
+            
+        # Sort by score desc, take top 2
+        scored.sort(key=lambda x: x[0], reverse=True)
+        top_2 = [s[1] for s in scored[:2]]
+        return " ... ".join(top_2)
+
+    async def search(self, query: str) -> dict:
+        """
+        Search Wikipedia for a claim using `httpx` async calls.
+        """
+        cache_key = f"wiki_{query}"
+        cached = get_cached(cache_key)
+        if cached:
+            logger.info(f"Wiki cache hit for: {query}")
+            return cached
 
         search_terms = self._extract_search_terms(query)
-        logger.info(f"Search terms to try: {search_terms}")
+        logger.info(f"Wiki search terms (Primary -> Fuzzy): {search_terms}")
 
-        for term in search_terms:
-            try:
-                page = self.wiki.page(term)
+        async with httpx.AsyncClient(timeout=self.timeout, headers={"User-Agent": "AIHallucinationDetector/1.0", "Accept": "application/json"}) as client:
+            for term in search_terms:
+                try:
+                    # 1. First, search for the page title
+                    search_params = {
+                        "action": "query",
+                        "list": "search",
+                        "srsearch": term,
+                        "utf8": "",
+                        "format": "json",
+                        "srlimit": 1
+                    }
+                    search_res = await client.get(self.base_url, params=search_params)
+                    search_data = search_res.json()
+                    
+                    search_list = search_data.get("query", {}).get("search", [])
+                    if not search_list:
+                        logger.info(f"Wiki fuzzy miss for term: {term}")
+                        continue
+                        
+                    title = search_list[0]["title"]
+                    
+                    # 2. Fetch the page extract
+                    extract_params = {
+                        "action": "query",
+                        "prop": "extracts",
+                        "exchars": 800,
+                        "titles": title,
+                        "explaintext": 1,
+                        "format": "json"
+                    }
+                    ext_res = await client.get(self.base_url, params=extract_params)
+                    ext_data = ext_res.json()
+                    
+                    pages = ext_data.get("query", {}).get("pages", {})
+                    if not pages or "-1" in pages:
+                        continue
+                        
+                    page_id = list(pages.keys())[0]
+                    content = pages[page_id].get("extract", "")
+                    
+                    if not content:
+                        continue
+                        
+                    # Filter down to top 2 snippets max
+                    snippets = self._extract_top_2_snippets(content, query)
+                    if not snippets:
+                        snippets = content[:300] # fallback
 
-                if not page.exists():
-                    logger.info(f"Wikipedia page not found for: {term}")
+                    result = {
+                        "title": title,
+                        "content": snippets,
+                        "url": f"https://en.wikipedia.org/wiki/{title.replace(' ', '_')}",
+                        "found": True,
+                    }
+                    
+                    # Cache successful result
+                    set_cached(cache_key, result)
+                    logger.info(f"Wiki Hit: '{title}' via '{term}'")
+                    return result
+
+                except httpx.TimeoutException:
+                    logger.error(f"Wiki timeout (>600ms) for term: {term}")
+                    # Fast-fail the entire Wiki block if one term timeouts to respect 1-sec SLA
+                    break
+                except Exception as e:
+                    logger.error(f"Wiki API error: {e}")
                     continue
 
-                # Extract summary
-                summary = page.summary
-                if not summary:
-                    logger.info(f"Wikipedia page found but no summary: {term}")
-                    continue
+        # Nothing found
+        failed = {"title": None, "content": None, "url": None, "found": False}
+        set_cached(cache_key, failed)
+        return failed
 
-                # Use full summary (Wikipedia summaries are usually 1-3k chars)
-                content = summary[:3000]
-
-                # Simple relevance: check if query words appear in content
-                query_words = set(query.lower().split())
-                content_lower = content.lower()
-                matching = sum(1 for w in query_words if w in content_lower)
-                relevance = matching / max(len(query_words), 1)
-
-                logger.info(
-                    f"Wikipedia found: '{page.title}' (via term '{term}') | "
-                    f"{len(content)} chars, relevance={relevance:.2f}"
-                )
-
-                return {
-                    "title": page.title,
-                    "content": content,
-                    "url": page.fullurl,
-                    "relevance_score": round(relevance, 2),
-                    "found": True,
-                }
-
-            except Exception as e:
-                logger.error(f"Wikipedia search failed for '{term}': {e}", exc_info=True)
-                continue
-
-        # Nothing found across all terms
-        return {
-            "title": None,
-            "content": None,
-            "url": None,
-            "relevance_score": 0.0,
-            "found": False,
-        }
-
-    def get_evidence(self, claim: str) -> Optional[str]:
-        """
-        Get evidence text for a specific claim.
-
-        Args:
-            claim: The factual claim to verify
-
-        Returns:
-            Evidence text if found, None otherwise
-        """
-        result = self.search(claim)
+    async def get_evidence(self, claim: str) -> Optional[str]:
+        """Get evidence text for a claim."""
+        result = await self.search(claim)
         if result.get("found"):
             return result.get("content")
         return None
