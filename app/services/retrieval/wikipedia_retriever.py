@@ -16,14 +16,14 @@ logger = get_logger(__name__)
 class WikipediaRetriever:
     """
     Retrieves evidence from Wikipedia for encyclopedic claims.
-    Uses strict 600ms timeouts and fuzzy fallback logic.
+    Uses generous timeouts (10s) to maximise evidence retrieval for accuracy.
     """
 
     def __init__(self):
         """Initialize Wikipedia retriever."""
         self.base_url = "https://en.wikipedia.org/w/api.php"
-        # Strict timeout requirement from plan
-        self.timeout = 0.6 
+        # Accuracy-first: allow up to 10 seconds for Wikipedia to respond
+        self.timeout = 10.0
 
     @staticmethod
     def _extract_search_terms(query: str) -> list[str]:
@@ -61,9 +61,10 @@ class WikipediaRetriever:
 
         return terms
 
-    def _extract_top_2_snippets(self, text: str, query: str) -> str:
+    def _extract_top_snippets(self, text: str, query: str, top_n: int = 5) -> str:
         """
-        Slice evidence to Top 2 snippets/sentences for tiny LLM Context.
+        Slice evidence to Top N snippets/sentences ranked by relevance.
+        Returns more context so the LLM judge can make accurate decisions.
         """
         sentences = re.split(r'(?<=[.!?])\s+', text)
         sentences = [s.strip() for s in sentences if len(s.strip()) > 15]
@@ -79,10 +80,10 @@ class WikipediaRetriever:
             score = sum(1 for w in query_words if w in s_lower)
             scored.append((score, s))
             
-        # Sort by score desc, take top 2
+        # Sort by score desc, take top N
         scored.sort(key=lambda x: x[0], reverse=True)
-        top_2 = [s[1] for s in scored[:2]]
-        return " ... ".join(top_2)
+        top = [s[1] for s in scored[:top_n]]
+        return " ... ".join(top)
 
     async def search(self, query: str) -> dict:
         """
@@ -119,11 +120,11 @@ class WikipediaRetriever:
                         
                     title = search_list[0]["title"]
                     
-                    # 2. Fetch the page extract
+                    # 2. Fetch the page extract — larger budget for accuracy
                     extract_params = {
                         "action": "query",
                         "prop": "extracts",
-                        "exchars": 800,
+                        "exchars": 2000,
                         "titles": title,
                         "explaintext": 1,
                         "format": "json"
@@ -141,10 +142,10 @@ class WikipediaRetriever:
                     if not content:
                         continue
                         
-                    # Filter down to top 2 snippets max
-                    snippets = self._extract_top_2_snippets(content, query)
+                    # Extract top 5 most-relevant snippets for rich evidence
+                    snippets = self._extract_top_snippets(content, query, top_n=5)
                     if not snippets:
-                        snippets = content[:300] # fallback
+                        snippets = content[:600]  # fallback — more chars
 
                     result = {
                         "title": title,
@@ -159,9 +160,9 @@ class WikipediaRetriever:
                     return result
 
                 except httpx.TimeoutException:
-                    logger.error(f"Wiki timeout (>600ms) for term: {term}")
-                    # Fast-fail the entire Wiki block if one term timeouts to respect 1-sec SLA
-                    break
+                    logger.error(f"Wiki timeout (>10s) for term: {term} — trying next term")
+                    # Try next term instead of aborting everything
+                    continue
                 except Exception as e:
                     logger.error(f"Wiki API error: {e}")
                     continue

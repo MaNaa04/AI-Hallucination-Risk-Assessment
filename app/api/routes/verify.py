@@ -24,7 +24,7 @@ router = APIRouter(prefix="/api", tags=["verification"])
 async def verify(request: VerifyRequest) -> VerifyResponse:
     """
     Verify if an AI answer contains hallucinations.
-    Pipeline uses async/await everywhere to hit 1000ms SLA.
+    Accuracy-first pipeline: may take 10-15 seconds for thorough verification.
     """
     request_id = str(uuid.uuid4())
     pipeline_start = time.perf_counter()
@@ -34,28 +34,13 @@ async def verify(request: VerifyRequest) -> VerifyResponse:
         f"question_len={len(request.question)} answer_len={len(request.answer)}"
     )
     
-    # ── Layer 2 — Query Preprocessing (with PRE-FETCH Fast Path) ───
+    # ── Layer 2 — Query Preprocessing (Full LLM Triplet Extraction) ─
     step_start = time.perf_counter()
     try:
-        # Pre-fetch check: Avoid slow LLM if we can extract proper nouns via regex
-        import re
-        capitalized_entities = re.findall(r'\b(?:[A-Z][a-z]+\s+){1,2}[A-Z][a-z]+\b|\b[A-Z][a-z]+\b', request.answer)
-        # Filter common words
-        stopwords = {"The", "This", "That", "There", "When", "In", "It"}
-        fast_claims = [e for e in set(capitalized_entities) if e not in stopwords and len(e) > 3]
-
-        if fast_claims:
-            from app.services.preprocessing.query_preprocessor import ProcessedQuery
-            processed = ProcessedQuery(
-                original_question=request.question,
-                original_answer=request.answer,
-                extracted_claims=fast_claims[:2], # Take top 2 entities
-                query_type="encyclopedic" # Default to wiki
-            )
-            logger.info(f"[{request_id}] Pre-fetch Fast Path Engaged: Bypassed LLM Triplet Extraction")
-        else:
-            processed = await QueryPreprocessor.preprocess_async(request.question, request.answer)
-            
+        # Always use the full LLM-based preprocessing for accurate claim extraction.
+        # The regex fast-path was bypassing LLM triplet extraction and producing
+        # weak entity strings that failed to retrieve meaningful evidence.
+        processed = await QueryPreprocessor.preprocess_async(request.question, request.answer)
         step_ms = int((time.perf_counter() - step_start) * 1000)
         logger.info(f"[{request_id}] Preprocess complete ({step_ms}ms) | claims={len(processed.extracted_claims)}")
     except Exception as e:

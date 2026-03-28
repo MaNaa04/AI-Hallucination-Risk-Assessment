@@ -102,8 +102,9 @@ class VerifyResponse(BaseModel):
         Returns:
             Formatted response with user-friendly verdict
         """
-        # Map judge verdict to user-friendly verdict based on score
-        if judge_resp.score >= 75:
+        # Map judge score to user-friendly verdict
+        # 70+  = accurate (verified), 40-69 = uncertain (unverifiable), <40 = hallucination
+        if judge_resp.score >= 70:
             verdict = "accurate"
         elif judge_resp.score >= 40:
             verdict = "uncertain"

@@ -34,7 +34,7 @@ class Settings(BaseSettings):
     cache_ttl_seconds: int = 3600
     
     # Evidence Configuration
-    max_evidence_tokens: int = 800
+    max_evidence_tokens: int = 2000
     max_claims_per_request: int = 3
     
     class Config:

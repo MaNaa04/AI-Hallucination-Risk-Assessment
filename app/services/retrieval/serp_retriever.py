@@ -15,14 +15,14 @@ logger = get_logger(__name__)
 class SerpAPIRetriever:
     """
     Retrieves evidence from Google Search via SerpAPI HTTP rest endpoint.
-    Strict 600ms timeouts and fuzzy fallback search enabled.
+    Uses generous 10s timeouts for accuracy-first operation.
     """
 
     def __init__(self):
         """Initialize SerpAPI retriever."""
         settings = get_settings()
         self.api_key = settings.serpapi_key
-        self.timeout = 0.6 # Strict sub-second latency SLA
+        self.timeout = 10.0  # Accuracy-first: allow up to 10 seconds
 
     def _fuzzy_keywords(self, query: str) -> list[str]:
         """Generate broader search terms if the strict query fails."""
@@ -84,9 +84,9 @@ class SerpAPIRetriever:
                                 "source": "knowledge_graph",
                             })
 
-                    # Extract Top Organic
-                    for item in raw.get("organic_results", [])[:2]:
-                        if len(results) >= 2:
+                    # Extract Top Organic — up to 5 results for richer evidence
+                    for item in raw.get("organic_results", [])[:5]:
+                        if len(results) >= 5:
                             break
                         results.append({
                             "title": item.get("title", ""),
@@ -106,8 +106,8 @@ class SerpAPIRetriever:
                         return response_obj
                         
                 except httpx.TimeoutException:
-                    logger.error(f"SerpAPI timeout (>600ms) for: {term}")
-                    break # Break on first timeout to protect 1s rule
+                    logger.error(f"SerpAPI timeout (>10s) for: {term} — trying next term")
+                    continue  # Try remaining search terms instead of aborting
                 except Exception as e:
                     logger.error(f"SerpAPI search failed: {e}")
                     continue
@@ -117,10 +117,10 @@ class SerpAPIRetriever:
         return failed
 
     async def get_evidence(self, claim: str) -> Optional[str]:
-        """Get evidence from Top 2 web search snippets."""
+        """Get evidence from Top 5 web search snippets."""
         result = await self.search(claim)
         if result.get("found") and result.get("results"):
             snippets = [r.get("snippet", "") for r in result["results"] if r.get("snippet")]
-            # Join up to top 2 for small context
-            return "\n".join(snippets[:2]) if snippets else None
+            # Join up to top 5 for richer context
+            return "\n".join(snippets[:5]) if snippets else None
         return None
