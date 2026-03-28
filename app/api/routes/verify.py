@@ -6,6 +6,7 @@ POST /verify - Entry point for verification requests.
 
 import time
 import uuid
+from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException
 from app.core.logging import get_logger
 from app.models.request import VerifyRequest
@@ -14,6 +15,7 @@ from app.services.preprocessing.query_preprocessor import QueryPreprocessor
 from app.services.retrieval.source_router import SourceRouter
 from app.services.retrieval.evidence_aggregator import EvidenceAggregator
 from app.services.judge.llm_judge import LLMJudge
+from app.services.analytics.tracker import AnalyticsTracker, VerificationEvent
 
 logger = get_logger(__name__)
 
@@ -54,12 +56,14 @@ async def verify(request: VerifyRequest) -> VerifyResponse:
     try:
         logger.info(f"[{request_id}] Step 1: Preprocessing query")
         processed = QueryPreprocessor.preprocess(request.question, request.answer)
-        step_ms = int((time.time() - step_start) * 1000)
+        preprocessing_ms = int((time.time() - step_start) * 1000)
+        step_ms = preprocessing_ms
         logger.info(
             f"[{request_id}] Step 1 complete ({step_ms}ms) | "
             f"claims={len(processed.extracted_claims)} type={processed.query_type}"
         )
     except Exception as e:
+        preprocessing_ms = int((time.time() - step_start) * 1000)
         logger.error(f"[{request_id}] Preprocessing failed: {e}", exc_info=True)
         raise HTTPException(
             status_code=500,
@@ -76,13 +80,15 @@ async def verify(request: VerifyRequest) -> VerifyResponse:
             processed.extracted_claims,
             processed.query_type
         )
-        step_ms = int((time.time() - step_start) * 1000)
+        retrieval_ms = int((time.time() - step_start) * 1000)
+        step_ms = retrieval_ms
         logger.info(
             f"[{request_id}] Step 2 complete ({step_ms}ms) | "
             f"sources_found={len(evidence_map)}"
         )
     except Exception as e:
-        step_ms = int((time.time() - step_start) * 1000)
+        retrieval_ms = int((time.time() - step_start) * 1000)
+        step_ms = retrieval_ms
         logger.warning(
             f"[{request_id}] Evidence retrieval failed ({step_ms}ms), "
             f"continuing with empty evidence: {e}",
@@ -122,13 +128,15 @@ async def verify(request: VerifyRequest) -> VerifyResponse:
             request.answer,
             aggregated_evidence
         )
-        step_ms = int((time.time() - step_start) * 1000)
+        judge_ms = int((time.time() - step_start) * 1000)
+        step_ms = judge_ms
         logger.info(
             f"[{request_id}] Step 4 complete ({step_ms}ms) | "
             f"judge_score={judge_response.score} judge_verdict={judge_response.verdict}"
         )
     except Exception as e:
-        step_ms = int((time.time() - step_start) * 1000)
+        judge_ms = int((time.time() - step_start) * 1000)
+        step_ms = judge_ms
         logger.error(
             f"[{request_id}] LLM judge failed ({step_ms}ms), "
             f"returning neutral verdict: {e}",
@@ -151,6 +159,31 @@ async def verify(request: VerifyRequest) -> VerifyResponse:
         request_id=request_id,
         processing_time_ms=processing_time_ms,
     )
+    
+    # ── Analytics Tracking ─────────────────────────────────────────
+    try:
+        tracker = AnalyticsTracker()
+        tracker.record(VerificationEvent(
+            request_id=request_id,
+            timestamp=datetime.now(timezone.utc).isoformat(),
+            question_preview=request.question[:80],
+            answer_preview=request.answer[:120],
+            score=final_response.score,
+            verdict=final_response.verdict,
+            sources_used=sources or [],
+            processing_time_ms=processing_time_ms,
+            claims_count=len(processed.extracted_claims),
+            evidence_chars=len(aggregated_evidence),
+            provider=getattr(judge, 'provider', ''),
+            query_type=processed.query_type,
+            sentences_found=processed.sentences_found,
+            factual_sentences=processed.factual_sentences,
+            preprocessing_time_ms=preprocessing_ms,
+            retrieval_time_ms=retrieval_ms,
+            judge_time_ms=judge_ms,
+        ))
+    except Exception as e:
+        logger.warning(f"[{request_id}] Analytics tracking failed: {e}")
     
     logger.info(
         f"[{request_id}] Verification complete ({processing_time_ms}ms) | "

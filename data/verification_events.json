@@ -1,0 +1,62 @@
+[
+  {
+    "request_id": "a0a97029-5c3e-4373-9e53-20223b70b10c",
+    "timestamp": "2026-03-28T03:31:37.637683+00:00",
+    "question_preview": "Which country won the 2026 t20 World Cup?",
+    "answer_preview": "India won the 2026 t20 world Cup",
+    "score": 100,
+    "verdict": "accurate",
+    "sources_used": [
+      "SerpAPI",
+      "Wikipedia"
+    ],
+    "processing_time_ms": 7351,
+    "claims_count": 1,
+    "evidence_chars": 3148,
+    "provider": "groq",
+    "query_type": "recent_event",
+    "sentences_found": 1,
+    "factual_sentences": 1,
+    "preprocessing_time_ms": 1,
+    "retrieval_time_ms": 6482,
+    "judge_time_ms": 865
+  },
+  {
+    "request_id": "1487515d-2778-4d53-87fc-6a25459ffe7e",
+    "timestamp": "2026-03-28T03:32:09.345969+00:00",
+    "question_preview": "What is the capital of India",
+    "answer_preview": "Delhi",
+    "score": 50,
+    "verdict": "uncertain",
+    "sources_used": [],
+    "processing_time_ms": 609,
+    "claims_count": 0,
+    "evidence_chars": 0,
+    "provider": "groq",
+    "query_type": "encyclopedic",
+    "sentences_found": 0,
+    "factual_sentences": 0,
+    "preprocessing_time_ms": 0,
+    "retrieval_time_ms": 10,
+    "judge_time_ms": 597
+  },
+  {
+    "request_id": "8c064152-66b9-4e61-9dc3-e3745d250dbb",
+    "timestamp": "2026-03-28T03:32:27.510014+00:00",
+    "question_preview": "What is the capital of India",
+    "answer_preview": "New Delhi",
+    "score": 50,
+    "verdict": "uncertain",
+    "sources_used": [],
+    "processing_time_ms": 571,
+    "claims_count": 0,
+    "evidence_chars": 0,
+    "provider": "groq",
+    "query_type": "encyclopedic",
+    "sentences_found": 0,
+    "factual_sentences": 0,
+    "preprocessing_time_ms": 0,
+    "retrieval_time_ms": 10,
+    "judge_time_ms": 560
+  }
+]
