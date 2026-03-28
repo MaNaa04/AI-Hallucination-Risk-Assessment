@@ -1,180 +1,421 @@
 /**
  * AI Hallucination Detector - Content Script
- * Runs on all pages to enable text selection and context menu verification
+ * Runs on all pages. Handles:
+ *  - Text selection detection
+ *  - Context menu verification (via background.js messages)
+ *  - Inline result overlay display
  */
+
+const HD_API_URL = "http://localhost:8000/api/verify";
 
 // Listen for messages from background script or popup
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === "GET_SELECTION") {
-    const selectedText = window.getSelection()?.toString() || "";
-    sendResponse({ text: selectedText });
+    sendResponse({ text: window.getSelection()?.toString() || "" });
+  }
+
+  if (message.action === "VERIFY_SELECTION") {
+    const text = message.text || window.getSelection()?.toString();
+    if (text && text.trim().length > 5) {
+      verifyAndShowOverlay(text.trim());
+    }
   }
 
   if (message.action === "SHOW_RESULT") {
     showResultOverlay(message.result);
   }
 
-  return true; // Keep message channel open for async response
+  return true;
 });
 
 /**
- * Create and show a floating result overlay on the page
+ * Call the API and show the result overlay
  */
-function showResultOverlay(result) {
-  // Remove existing overlay if present
-  const existing = document.getElementById("hallucination-detector-overlay");
-  if (existing) {
-    existing.remove();
+async function verifyAndShowOverlay(text) {
+  showLoadingOverlay();
+
+  try {
+    const res = await fetch(HD_API_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        question: "Is this statement factually accurate?",
+        answer: text,
+      }),
+    });
+
+    if (!res.ok) throw new Error("Server error");
+
+    const data = await res.json();
+    showResultOverlay(data);
+  } catch (err) {
+    showErrorOverlay("Cannot connect to verification server. Ensure the backend is running.");
   }
-
-  const { score, verdict, explanation, sources_used } = result;
-
-  // Create overlay container
-  const overlay = document.createElement("div");
-  overlay.id = "hallucination-detector-overlay";
-  overlay.innerHTML = `
-    <div class="hd-header">
-      <span class="hd-title">🔍 AI Hallucination Check</span>
-      <button class="hd-close">&times;</button>
-    </div>
-    <div class="hd-content">
-      <div class="hd-verdict ${verdict}">${getVerdictDisplay(verdict)}</div>
-      <div class="hd-score">Score: <strong>${score}</strong>/100</div>
-      <div class="hd-explanation">${explanation}</div>
-      <div class="hd-sources">Sources: ${sources_used?.join(", ") || "None"}</div>
-    </div>
-  `;
-
-  // Add styles
-  const styles = document.createElement("style");
-  styles.textContent = `
-    #hallucination-detector-overlay {
-      position: fixed;
-      top: 20px;
-      right: 20px;
-      width: 320px;
-      background: white;
-      border-radius: 12px;
-      box-shadow: 0 4px 20px rgba(0,0,0,0.15);
-      z-index: 999999;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      font-size: 14px;
-      animation: hd-slide-in 0.3s ease-out;
-    }
-
-    @keyframes hd-slide-in {
-      from {
-        opacity: 0;
-        transform: translateX(20px);
-      }
-      to {
-        opacity: 1;
-        transform: translateX(0);
-      }
-    }
-
-    .hd-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 12px 16px;
-      border-bottom: 1px solid #eee;
-      background: #f8f9fa;
-      border-radius: 12px 12px 0 0;
-    }
-
-    .hd-title {
-      font-weight: 600;
-      color: #333;
-    }
-
-    .hd-close {
-      background: none;
-      border: none;
-      font-size: 20px;
-      cursor: pointer;
-      color: #666;
-      padding: 0;
-      line-height: 1;
-    }
-
-    .hd-close:hover {
-      color: #333;
-    }
-
-    .hd-content {
-      padding: 16px;
-    }
-
-    .hd-verdict {
-      font-size: 16px;
-      font-weight: 600;
-      padding: 8px 12px;
-      border-radius: 6px;
-      margin-bottom: 12px;
-    }
-
-    .hd-verdict.accurate {
-      background: #d4edda;
-      color: #155724;
-    }
-
-    .hd-verdict.uncertain {
-      background: #fff3cd;
-      color: #856404;
-    }
-
-    .hd-verdict.hallucination {
-      background: #f8d7da;
-      color: #721c24;
-    }
-
-    .hd-score {
-      margin-bottom: 8px;
-      color: #555;
-    }
-
-    .hd-explanation {
-      margin-bottom: 12px;
-      color: #333;
-      line-height: 1.5;
-    }
-
-    .hd-sources {
-      font-size: 12px;
-      color: #888;
-      border-top: 1px solid #eee;
-      padding-top: 8px;
-    }
-  `;
-
-  document.head.appendChild(styles);
-  document.body.appendChild(overlay);
-
-  // Close button handler
-  overlay.querySelector(".hd-close").addEventListener("click", () => {
-    overlay.remove();
-  });
-
-  // Auto-close after 15 seconds
-  setTimeout(() => {
-    if (document.getElementById("hallucination-detector-overlay")) {
-      overlay.remove();
-    }
-  }, 15000);
 }
 
 /**
- * Get display text for verdict
+ * Inject shared styles (idempotent)
  */
-function getVerdictDisplay(verdict) {
-  const verdictMap = {
-    "accurate": "✅ Likely Accurate",
-    "uncertain": "⚠️ Uncertain",
-    "hallucination": "🚩 Potential Hallucination"
-  };
-  return verdictMap[verdict] || verdict;
+function injectOverlayStyles() {
+  if (document.getElementById("hd-overlay-styles")) return;
+
+  const style = document.createElement("style");
+  style.id = "hd-overlay-styles";
+  style.textContent = `
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+    #hd-overlay {
+      position: fixed;
+      top: 16px;
+      right: 16px;
+      width: 340px;
+      background: #ffffff;
+      border-radius: 14px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06);
+      z-index: 2147483647;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-size: 13px;
+      color: #1a1a2e;
+      overflow: hidden;
+      animation: hdOverlayIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    @keyframes hdOverlayIn {
+      from {
+        opacity: 0;
+        transform: translateY(-8px) scale(0.97);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+    }
+
+    @keyframes hdOverlayOut {
+      from {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+      to {
+        opacity: 0;
+        transform: translateY(-8px) scale(0.97);
+      }
+    }
+
+    /* Header bar */
+    #hd-overlay .hdo-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 14px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    }
+
+    #hd-overlay .hdo-header-left {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    #hd-overlay .hdo-logo {
+      width: 22px;
+      height: 22px;
+      background: rgba(255,255,255,0.2);
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #hd-overlay .hdo-logo svg {
+      width: 13px;
+      height: 13px;
+      color: white;
+    }
+
+    #hd-overlay .hdo-title {
+      font-size: 12px;
+      font-weight: 600;
+      color: white;
+      letter-spacing: -0.1px;
+    }
+
+    #hd-overlay .hdo-close {
+      background: rgba(255,255,255,0.15);
+      border: none;
+      width: 22px;
+      height: 22px;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: background 0.15s;
+      color: rgba(255,255,255,0.8);
+      font-size: 14px;
+      line-height: 1;
+      padding: 0;
+    }
+
+    #hd-overlay .hdo-close:hover {
+      background: rgba(255,255,255,0.25);
+      color: white;
+    }
+
+    /* Body */
+    #hd-overlay .hdo-body {
+      padding: 14px;
+    }
+
+    /* Verdict row */
+    #hd-overlay .hdo-verdict-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+
+    #hd-overlay .hdo-verdict {
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: -0.2px;
+    }
+
+    #hd-overlay .hdo-verdict.accurate { color: #0d7a3e; }
+    #hd-overlay .hdo-verdict.uncertain { color: #b8860b; }
+    #hd-overlay .hdo-verdict.hallucination { color: #c53030; }
+
+    /* Score ring */
+    #hd-overlay .hdo-score {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      font-weight: 700;
+      color: white;
+      flex-shrink: 0;
+    }
+
+    #hd-overlay .hdo-score.high { background: linear-gradient(135deg, #0d7a3e, #28a745); }
+    #hd-overlay .hdo-score.mid  { background: linear-gradient(135deg, #d4a017, #f0c040); color: #5a4800; }
+    #hd-overlay .hdo-score.low  { background: linear-gradient(135deg, #c53030, #e53e3e); }
+
+    /* Explanation */
+    #hd-overlay .hdo-explanation {
+      font-size: 12px;
+      color: #495057;
+      line-height: 1.65;
+      margin-bottom: 12px;
+    }
+
+    /* Sources */
+    #hd-overlay .hdo-sources {
+      padding-top: 10px;
+      border-top: 1px solid #f0f0f0;
+    }
+
+    #hd-overlay .hdo-sources-label {
+      font-size: 10px;
+      font-weight: 600;
+      color: #adb5bd;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 6px;
+    }
+
+    #hd-overlay .hdo-source-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+    }
+
+    #hd-overlay .hdo-tag {
+      font-size: 11px;
+      padding: 2px 8px;
+      background: #f1f3f5;
+      border: 1px solid #e9ecef;
+      border-radius: 10px;
+      color: #5f6368;
+    }
+
+    /* Loading state */
+    #hd-overlay .hdo-loading {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 28px 16px;
+      gap: 10px;
+    }
+
+    #hd-overlay .hdo-spinner {
+      width: 26px;
+      height: 26px;
+      border: 2.5px solid #e8ecf1;
+      border-top-color: #667eea;
+      border-radius: 50%;
+      animation: hdSpin 0.7s linear infinite;
+    }
+
+    @keyframes hdSpin {
+      to { transform: rotate(360deg); }
+    }
+
+    #hd-overlay .hdo-loading-text {
+      font-size: 12px;
+      color: #5f6368;
+    }
+
+    /* Error state */
+    #hd-overlay .hdo-error {
+      padding: 16px;
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+    }
+
+    #hd-overlay .hdo-error-icon {
+      font-size: 16px;
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+
+    #hd-overlay .hdo-error-text {
+      font-size: 12px;
+      color: #c53030;
+      line-height: 1.5;
+    }
+  `;
+  document.head.appendChild(style);
 }
 
-// Log that content script is loaded (for debugging)
+/**
+ * Remove existing overlay
+ */
+function removeOverlay() {
+  const existing = document.getElementById("hd-overlay");
+  if (existing) {
+    existing.style.animation = "hdOverlayOut 0.2s ease-in forwards";
+    setTimeout(() => existing.remove(), 200);
+  }
+}
+
+/**
+ * Create the overlay shell with header
+ */
+function createOverlayShell() {
+  removeOverlay();
+  injectOverlayStyles();
+
+  const overlay = document.createElement("div");
+  overlay.id = "hd-overlay";
+  overlay.innerHTML = `
+    <div class="hdo-header">
+      <div class="hdo-header-left">
+        <div class="hdo-logo">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+            <path d="M9 12l2 2 4-4"></path>
+          </svg>
+        </div>
+        <span class="hdo-title">Hallucination Detector</span>
+      </div>
+      <button class="hdo-close" aria-label="Close">&times;</button>
+    </div>
+    <div class="hdo-body"></div>
+  `;
+
+  document.body.appendChild(overlay);
+
+  overlay.querySelector(".hdo-close").addEventListener("click", removeOverlay);
+
+  return overlay;
+}
+
+/**
+ * Show loading state
+ */
+function showLoadingOverlay() {
+  const overlay = createOverlayShell();
+  overlay.querySelector(".hdo-body").innerHTML = `
+    <div class="hdo-loading">
+      <div class="hdo-spinner"></div>
+      <span class="hdo-loading-text">Verifying claims...</span>
+    </div>
+  `;
+}
+
+/**
+ * Show error state
+ */
+function showErrorOverlay(message) {
+  const overlay = createOverlayShell();
+  overlay.querySelector(".hdo-body").innerHTML = `
+    <div class="hdo-error">
+      <span class="hdo-error-icon">⚠️</span>
+      <span class="hdo-error-text">${message}</span>
+    </div>
+  `;
+  autoClose(overlay, 8000);
+}
+
+/**
+ * Show the verification result
+ */
+function showResultOverlay(result) {
+  const { score, verdict, explanation, sources_used } = result;
+
+  const overlay = createOverlayShell();
+
+  // Classify
+  const verdictMap = {
+    accurate: { text: "✅ Likely Accurate", cls: "accurate" },
+    verified: { text: "✅ Verified", cls: "accurate" },
+    uncertain: { text: "⚠️ Uncertain", cls: "uncertain" },
+    unverifiable: { text: "❓ Unverifiable", cls: "uncertain" },
+    hallucination: { text: "🚩 Hallucination Detected", cls: "hallucination" },
+    likely_hallucination: { text: "🚩 Likely Hallucination", cls: "hallucination" },
+  };
+
+  const v = verdictMap[verdict] || { text: "❓ Unknown", cls: "uncertain" };
+
+  let scoreClass = "mid";
+  if (score >= 70) scoreClass = "high";
+  else if (score < 40) scoreClass = "low";
+
+  // Sources
+  const sourceTags = (sources_used && sources_used.length > 0)
+    ? sources_used.map(s => `<span class="hdo-tag">${s}</span>`).join("")
+    : '<span class="hdo-tag">None</span>';
+
+  overlay.querySelector(".hdo-body").innerHTML = `
+    <div class="hdo-verdict-row">
+      <span class="hdo-verdict ${v.cls}">${v.text}</span>
+      <div class="hdo-score ${scoreClass}">${score}</div>
+    </div>
+    <p class="hdo-explanation">${explanation}</p>
+    <div class="hdo-sources">
+      <div class="hdo-sources-label">Sources</div>
+      <div class="hdo-source-tags">${sourceTags}</div>
+    </div>
+  `;
+
+  autoClose(overlay, 20000);
+}
+
+/**
+ * Auto-close overlay after a delay
+ */
+function autoClose(overlay, ms) {
+  setTimeout(() => {
+    if (document.getElementById("hd-overlay")) {
+      removeOverlay();
+    }
+  }, ms);
+}
+
+// Debug log
 console.log("[AI Hallucination Detector] Content script loaded");

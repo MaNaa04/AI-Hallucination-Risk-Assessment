@@ -1,344 +1,296 @@
-# AI Hallucination Detection System - Backend
+# 🛡️ TruthLens — AI Hallucination Detection System
 
-## Project Overview
+> **Real-time, plug-and-play AI fact-checking.** Chrome extension + backend pipeline + analytics dashboard.  
+> Verify AI-generated claims against Wikipedia and SerpAPI in seconds.
 
-This backend system detects and flags AI hallucinations by grounding LLM judgments in external evidence sources.
+---
 
-### Key Features
-- **Evidence-Grounded Verification**: Uses Wikipedia and SerpAPI to retrieve evidence
-- **Smart Query Routing**: Routes queries to appropriate sources based on type
-- **LLM Judge**: Evidence-based evaluation reduces judge hallucinations
-- **Extensible Architecture**: Layered design allows easy addition of new components
+## 🚀 What is TruthLens?
 
-## Architecture
+TruthLens is a complete AI hallucination detection system that:
 
-The backend follows a 5-layer architecture:
+1. **Chrome Extension** — Detects AI chat interfaces (ChatGPT, Gemini, Claude) and adds inline fact-checking, or verify any selected text via the popup
+2. **Backend API** — 5-layer pipeline that extracts claims, retrieves evidence from multiple sources, and judges accuracy with an LLM
+3. **Analytics Dashboard** — Two dashboards for monitoring verification stats, preprocessing insights, and pipeline performance
 
-### Layer 1: API Gateway
-- **File**: `app/api/routes/verify.py`
-- **Responsibility**: Validate input, parse request, coordinate pipeline
-- **Endpoint**: `POST /verify`
-- Input: `{ "question": "...", "answer": "..." }`
+---
 
-### Layer 2: Query Preprocessor
-- **File**: `app/services/preprocessing/query_preprocessor.py`
-- **Responsibility**: Extract factual claims, determine query type
-- **Output**: Structured claims and type classification
-
-### Layer 3: Retrieval Engine
-- **Files**:
-  - `app/services/retrieval/wikipedia_retriever.py` - Encyclopedic facts
-  - `app/services/retrieval/serp_retriever.py` - Recent events & web results
-  - `app/services/retrieval/source_router.py` - Routing logic
-  - `app/services/retrieval/evidence_aggregator.py` - Dedup, rank, trim evidence
-
-### Layer 4: LLM Judge
-- **File**: `app/services/judge/llm_judge.py`
-- **Responsibility**: Evidence-grounded fact verification
-- **Output**: Score (0-100), verdict, explanation
-
-### Layer 5: Response Builder
-- **File**: `app/models/response.py`
-- **Responsibility**: Format judge output for frontend
-- **Output**: User-friendly verdict (accurate/uncertain/hallucination)
-
-## Project Structure
+## 📁 Project Structure
 
 ```
-.
-├── app/
-│   ├── api/
-│   │   ├── routes/
-│   │   │   └── verify.py              # Layer 1 - API Gateway
-│   │   └── __init__.py
-│   ├── core/
-│   │   ├── config.py                  # Settings & environment
-│   │   ├── logging.py                 # Shared logger
-│   │   └── __init__.py
-│   ├── models/
-│   │   ├── request.py                 # Pydantic request model
-│   │   ├── response.py                # Pydantic response model
-│   │   └── __init__.py
+TruthLens/
+│
+├── chrome-extension/           # 🧩 Chrome Extension (frontend)
+│   ├── manifest.json           #    Extension manifest
+│   ├── popup.html / popup.js   #    Extension popup UI
+│   ├── content.js              #    Page content script
+│   ├── ai-chat-injector.js     #    Auto-inject into AI chat UIs
+│   └── background.js           #    Service worker
+│
+├── app/                        # ⚙️ Backend (FastAPI)
+│   ├── api/routes/
+│   │   ├── verify.py           #    POST /api/verify — main endpoint
+│   │   └── analytics.py        #    GET /api/analytics/* — dashboard data
 │   ├── services/
 │   │   ├── preprocessing/
-│   │   │   ├── query_preprocessor.py  # Layer 2
-│   │   │   └── __init__.py
+│   │   │   └── query_preprocessor.py  # Claim extraction & query typing
 │   │   ├── retrieval/
-│   │   │   ├── wikipedia_retriever.py # Layer 3a
-│   │   │   ├── serp_retriever.py      # Layer 3b
-│   │   │   ├── source_router.py       # Layer 3c
-│   │   │   ├── evidence_aggregator.py # Layer 3d
-│   │   │   └── __init__.py
+│   │   │   ├── wikipedia_retriever.py # Wikipedia evidence
+│   │   │   ├── serp_retriever.py      # SerpAPI web search
+│   │   │   ├── source_router.py       # Smart routing
+│   │   │   └── evidence_aggregator.py # Dedup, rank, trim evidence
 │   │   ├── judge/
-│   │   │   ├── llm_judge.py           # Layer 4
-│   │   │   └── __init__.py
-│   │   └── __init__.py
-│   ├── utils/
-│   │   ├── cache.py                   # Caching utilities
-│   │   └── __init__.py
-│   └── __init__.py
-├── main.py                            # FastAPI entrypoint
-├── requirements.txt                   # Dependencies
-├── .env.example                       # Environment template
-└── README.md                          # This file
+│   │   │   └── llm_judge.py           # LLM-based verdict (Groq/Gemini)
+│   │   └── analytics/
+│   │       └── tracker.py             # Event storage & stats
+│   ├── models/
+│   │   ├── request.py          #    VerifyRequest model
+│   │   └── response.py         #    VerifyResponse model
+│   └── core/
+│       ├── config.py           #    Settings & environment
+│       └── logging.py          #    Shared logger
+│
+├── dashboard/                  # 📊 Basic Dashboard
+│   ├── index.html              #    Overview, history, live verify
+│   ├── styles.css
+│   └── app.js
+│
+├── analytics-dashboard/        # 📈 Advanced Analytics Dashboard
+│   ├── index.html              #    5 tabs with Chart.js visuals
+│   ├── styles.css              #    Premium dark glassmorphism theme
+│   └── app.js                  #    Charts, pipeline breakdown
+│
+├── tests/                      # 🧪 Tests
+│   ├── test_preprocessor.py
+│   └── test_retrievers.py
+│
+├── data/                       # 💾 Analytics data (auto-created)
+│   └── verification_events.json
+│
+├── main.py                     # 🏁 FastAPI entrypoint
+├── requirements.txt            # 📦 Python dependencies
+├── .env.example                # 🔑 Environment template
+└── README.md                   # 📄 This file
 ```
 
-## Getting Started
+---
 
-### 1. Clone & Setup
+## ⚡ Quick Start
+
+### 1. Clone & Install
+
 ```bash
 git clone <repo-url>
-cd ai-hallucination-detection
-```
+cd AI-Hallucination-Risk-Assessment
 
-### 2. Install Dependencies
-```bash
+# Create virtual environment
+python -m venv venv
+source venv/bin/activate        # macOS/Linux
+# venv\Scripts\activate         # Windows
+
+# Install dependencies
 pip install -r requirements.txt
 ```
 
-### 3. Configure Environment
+### 2. Configure API Keys
+
 ```bash
 cp .env.example .env
-# Edit .env and fill in your API keys:
-# - LLM_API_KEY (OpenAI, Anthropic, etc.)
-# - SERPAPI_KEY (for web search)
 ```
 
-### 4. Run the Backend
+Edit `.env` and fill in your keys:
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `LLM_PROVIDER` | ✅ | `gemini` (free) or `openai` |
+| `LLM_API_KEY` | ✅ | Your LLM API key |
+| `LLM_MODEL` | ✅ | Model name (e.g. `gemini-2.0-flash`) |
+| `SERPAPI_KEY` | ✅ | SerpAPI key for web search |
+| `WIKIPEDIA_API_ENABLED` | — | `true` (default) |
+| `MAX_CLAIMS_PER_REQUEST` | — | `3` (default) |
+| `MAX_EVIDENCE_TOKENS` | — | `800` (default) |
+
+### 3. Start the Backend
+
 ```bash
 python main.py
 ```
 
-Server will start at `http://localhost:8000`
+Server starts at **http://localhost:8000**
 
-Visit API docs: `http://localhost:8000/docs` (Swagger UI)
+### 4. Access Everything
 
-### 5. Test the Endpoint
-```bash
-curl -X POST "http://localhost:8000/api/verify" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "question": "What is the capital of France?",
-    "answer": "The capital of France is Paris, located on the Seine River."
-  }'
+| What | URL | Description |
+|------|-----|-------------|
+| 🔗 **API Docs** | http://localhost:8000/docs | Swagger UI — test endpoints |
+| 📊 **Basic Dashboard** | http://localhost:8000/dashboard | Overview + history + live verify |
+| 📈 **Analytics Dashboard** | http://localhost:8000/analytics | Deep pipeline insights (5 tabs) |
+| ❤️ **Health Check** | http://localhost:8000/api/health | Backend status |
+
+### 5. Install Chrome Extension
+
+1. Open **chrome://extensions/** in Chrome
+2. Enable **Developer mode** (top-right toggle)
+3. Click **Load unpacked** → select the `chrome-extension/` folder
+4. The TruthLens icon appears in your toolbar
+
+---
+
+## 🧩 Chrome Extension
+
+The extension works in two modes:
+
+### Manual Mode (Popup)
+- Click the TruthLens icon in the toolbar
+- Paste any AI-generated text → click **Verify Claims**
+- Or **select text on any page** → the popup auto-fills it
+
+### Auto-Inject Mode
+- Works on supported AI platforms: **ChatGPT**, **Google Gemini**, **Claude**
+- Automatically adds a "Verify" button to AI responses
+- Inline fact-checking without leaving the page
+
+### Dashboard Links
+- The extension footer has links to both the **Analytics Dashboard** and **Basic Dashboard**
+
+---
+
+## 📈 Analytics Dashboard
+
+The advanced analytics dashboard at `/analytics` has **5 tabs**:
+
+| Tab | What it shows |
+|-----|---------------|
+| **Overview** | KPI cards, verdict donut chart, score histogram, sources pie, score trend line |
+| **Preprocessing** | Query type distribution, sentence→claim funnel, preprocessing timeline |
+| **Pipeline** | Per-stage waterfall chart (preprocessing/retrieval/judging), stage share, latency percentiles |
+| **History** | Searchable/filterable table with query type badges, verdict badges, source tags |
+| **Live Verify** | Verify text with full pipeline breakdown — see extracted claims, query type, per-stage timing |
+
+---
+
+## 🔌 API Reference
+
+### `POST /api/verify`
+
+Verify if an AI answer contains hallucinations.
+
+**Request:**
+```json
+{
+  "question": "What is the capital of France?",
+  "answer": "The capital of France is Paris, located on the Seine River."
+}
 ```
 
-Expected response:
+**Response:**
 ```json
 {
   "score": 85,
   "verdict": "accurate",
   "explanation": "Verified against Wikipedia. Paris is indeed the capital of France.",
   "flag": false,
-  "sources_used": ["Wikipedia"]
+  "sources_used": ["Wikipedia"],
+  "request_id": "a1b2c3d4-...",
+  "processing_time_ms": 1250
 }
 ```
 
-## Implementation Roadmap
+**Score Ranges:**
+- `75–100` → ✅ **Accurate** — verified against sources
+- `40–74` → ⚠️ **Uncertain** — partially verified or mixed evidence
+- `0–39` → 🚩 **Hallucination** — contradicted by sources
 
-### Phase 1: Core Pipeline (MVP)
-- [x] Basic folder structure
-- [ ] Layer 1: API Gateway (input validation done, coordinate pipeline)
-- [ ] Layer 4: LLM Judge (basic version, no evidence first)
-- [ ] Layer 5: Response formatting
-- [ ] Basic testing with Postman
+### `GET /api/analytics/stats`
+Aggregate verification statistics (totals, averages, distributions).
 
-### Phase 2: Evidence Retrieval
-- [ ] Layer 2: Query Preprocessor (claim extraction)
-- [ ] Layer 3a: Wikipedia integration
-- [ ] Layer 3b: SerpAPI integration
-- [ ] Layer 3c: Source Router
-- [ ] Layer 3d: Evidence Aggregator
+### `GET /api/analytics/history?limit=50`
+Recent verification history (newest first).
 
-### Phase 3: Production Hardening
-- [ ] Caching layer (Redis or in-memory)
-- [ ] Error handling & logging
-- [ ] Rate limiting
-- [ ] Batch processing
-- [ ] Monitoring & metrics
+### `GET /api/analytics/preprocessing`
+Preprocessing-specific stats (query types, claim extraction metrics).
 
-## Todo List by Layer
+### `GET /api/analytics/pipeline`
+Per-stage pipeline performance (preprocessing, retrieval, judging timing).
 
-Each file contains `TODO` comments marking implementation points.
+### `GET /api/health`
+Health check — returns `{"status": "ok"}`.
 
-### Layer 1: API Gateway (`app/api/routes/verify.py`)
-- ✅ Route structure defined
-- ✅ Pydantic validation
-- ✅ Pipeline orchestration
-- [ ] Error handling refinement
+---
 
-### Layer 2: Query Preprocessor (`app/services/preprocessing/query_preprocessor.py`)
-- [ ] Implement `extract_claims()` - use small LLM or regex
-- [ ] Implement `determine_query_type()` - classify query for routing
+## 🏗️ Architecture
 
-### Layer 3a: Wikipedia Retriever (`app/services/retrieval/wikipedia_retriever.py`)
-- [ ] Install `wikipedia-api` library
-- [ ] Implement `search()` - call Wikipedia API
-- [ ] Extract first 2 paragraphs as evidence
+TruthLens uses a **5-layer pipeline**:
 
-### Layer 3b: SerpAPI Retriever (`app/services/retrieval/serp_retriever.py`)
-- [ ] Install `google-search-results` library
-- [ ] Implement `search()` - call SerpAPI
-- [ ] Extract top 3 snippets as evidence
-
-### Layer 3c: Source Router (`app/services/retrieval/source_router.py`)
-- ✅ Routing rules defined
-- [ ] Implement `retrieve_evidence()` - call appropriate retrievers
-
-### Layer 3d: Evidence Aggregator (`app/services/retrieval/evidence_aggregator.py`)
-- [ ] Implement `deduplicate()` - remove duplicate snippets
-- [ ] Implement `rank_evidence()` - prioritize best evidence
-- [ ] Implement `trim_to_budget()` - fit within token limit
-
-### Layer 4: LLM Judge (`app/services/judge/llm_judge.py`)
-- ✅ Prompt template defined
-- [ ] Initialize LLM client (OpenAI, Anthropic, etc.)
-- [ ] Implement `judge()` - make API call, parse response
-
-### Layer 5: Response Builder (`app/models/response.py`)
-- ✅ Mapping logic defined (score ranges to verdicts)
-- ✅ `from_judge_response()` implemented
-- [ ] Test with various score ranges
-
-## Key Design Decisions
+```
+User Input → [Layer 1: API Gateway]
+                    ↓
+             [Layer 2: Query Preprocessor]
+                - Split into sentences
+                - Filter factual claims
+                - Classify query type (encyclopedic / recent_event / numeric / opinion)
+                    ↓
+             [Layer 3: Evidence Retrieval]
+                - Wikipedia (encyclopedic facts)
+                - SerpAPI (recent events, web search)
+                - Aggregate & deduplicate evidence
+                    ↓
+             [Layer 4: LLM Judge]
+                - Evidence-grounded evaluation
+                - Score 0–100 with explanation
+                    ↓
+             [Layer 5: Response Builder]
+                - Map score to verdict
+                - Format for frontend
+```
 
 ### Why Evidence-Grounded Judging?
-- Pure GPT-as-Judge has hallucination risk
-- Grounding judge in retrieved evidence reduces false positives
+- Pure "LLM-as-judge" has its own hallucination risk
+- Grounding the judge in retrieved evidence dramatically reduces false positives
 - Wikipedia + SerpAPI provide diverse, reliable sources
 
-### How to Handle Unverifiable Claims?
-*Currently: Return score=50 with "unverifiable" verdict*
-- Alternative: Treat absence of evidence as hallucination risk
-- Recommendation: Start with neutral, adjust based on user feedback
+---
 
-### Single Score vs. Per-Claim Scores?
-*Currently: Single score for entire answer*
-- Simpler UI, easier to understand
-- Per-claim scores: More precise, but harder to aggregate
+## 🧪 Testing
 
-## Environment Variables
-
-| Variable | Description | Example |
-|----------|-------------|---------|
-| `LLM_API_KEY` | API key for LLM provider | `sk-...` |
-| `LLM_MODEL` | Model to use | `gpt-4` |
-| `LLM_API_BASE` | LLM API endpoint | `https://api.openai.com/v1` |
-| `SERPAPI_KEY` | SerpAPI key for web search | `abc123...` |
-| `WIKIPEDIA_API_ENABLED` | Enable Wikipedia retrieval | `true` |
-| `CACHE_ENABLED` | Enable caching | `true` |
-| `MAX_EVIDENCE_TOKENS` | Token limit for evidence | `800` |
-
-## API Endpoints
-
-### POST /verify
-Verify if an answer contains hallucinations.
-
-**Request**:
-```json
-{
-  "question": "What is the capital of France?",
-  "answer": "The capital of France is Paris, on the Seine River."
-}
-```
-
-**Response**:
-```json
-{
-  "score": 85,
-  "verdict": "accurate",
-  "explanation": "Verified against Wikipedia.",
-  "flag": false,
-  "sources_used": ["Wikipedia"]
-}
-```
-
-**Score Ranges**:
-- 75-100: ✅ Likely accurate
-- 40-74: ⚠️ Uncertain, verify
-- 0-39: 🚩 High hallucination risk
-
-### GET /health
-Health check endpoint.
-
-**Response**:
-```json
-{
-  "status": "ok",
-  "service": "hallucination-detection"
-}
-```
-
-## Logging
-
-All modules use `app.core.logging.get_logger()` for consistent logging.
-
-Enable debug logs:
 ```bash
-# In .env
-APP_DEBUG=true
-```
+# Run tests
+python -m pytest tests/ -v
 
-## Testing
-
-### Manual Testing with curl
-```bash
+# Manual test with curl
 curl -X POST "http://localhost:8000/api/verify" \
   -H "Content-Type: application/json" \
-  -d '{"question": "Who is the president of USA?", "answer": "Joe Biden"}'
+  -d '{"question": "Who invented the telephone?", "answer": "Alexander Graham Bell invented the telephone in 1876."}'
 ```
 
-### Automated Tests
-```bash
-# TODO: Add pytest tests
-pytest tests/
-```
+---
 
-## Contributing
+## 🛠️ Troubleshooting
 
-### Code Style
-- Follow PEP 8
-- Use type hints
-- Add docstrings to all functions
-- Add TODOs with layer numbers
+| Problem | Solution |
+|---------|----------|
+| **Backend won't start** | Check `.env` exists and has valid API keys |
+| **"Backend offline" in extension** | Make sure `python main.py` is running on port 8000 |
+| **Port 8000 in use** | Run `lsof -ti:8000 \| xargs kill -9` then restart |
+| **Score always 50** | LLM API key may be invalid or quota exceeded |
+| **No sources found** | Check `SERPAPI_KEY` is valid; verify `WIKIPEDIA_API_ENABLED=true` |
+| **Extension not loading** | Reload extension at `chrome://extensions/`, check Developer mode is ON |
 
-### Adding New Retrievers
-1. Create new file in `app/services/retrieval/`
-2. Implement retriever class with `search()` method
-3. Update `SourceRouter` to include new retriever
-4. Add configuration to `.env.example`
+---
 
-### Adding New LLM Providers
-1. Modify `app/services/judge/llm_judge.py`
-2. Initialize new LLM client
-3. Update prompt if needed
-4. Test with existing endpoints
+## 📚 Tech Stack
 
-## Troubleshooting
+| Component | Technology |
+|-----------|-----------|
+| Backend | Python, FastAPI, Uvicorn |
+| LLM | Gemini (default) / OpenAI / Groq |
+| Evidence | Wikipedia API, SerpAPI |
+| Extension | Chrome Manifest V3, vanilla JS |
+| Dashboards | HTML/CSS/JS, Chart.js |
+| Data | JSON file storage (no external DB) |
 
-### "LLM API key not configured"
-- Check `.env` file exists
-- Verify `LLM_API_KEY` is set
-- Run: `python -c "from app.core.config import get_settings; print(get_settings().llm_api_key)"`
+---
 
-### Wikipedia API returns empty results
-- Check `WIKIPEDIA_API_ENABLED=true` in `.env`
-- Verify claim extraction is working (check logs)
-- Try different search terms
+## 📄 License
 
-### Score always 50
-- Judge likely not implemented yet
-- Check `app/services/judge/llm_judge.py` for TODOs
-- Verify LLM API is configured and working
-
-## Resources
-
-- [FastAPI Docs](https://fastapi.tiangolo.com/)
-- [Pydantic Docs](https://docs.pydantic.dev/)
-- [Wikipedia API](https://pypi.org/project/wikipedia-api/)
-- [SerpAPI Docs](https://serpapi.com/docs)
-- [OpenAI API](https://platform.openai.com/docs)
-
-## License
-
-[Add your license here]
+MIT License

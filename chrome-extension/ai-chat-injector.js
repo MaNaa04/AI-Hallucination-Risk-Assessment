@@ -222,6 +222,61 @@ function createRightPanel() {
       font-size: 13px;
     }
 
+    .hd-dashboard-link {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      margin-top: 16px;
+      padding: 10px 16px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      text-decoration: none;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      transition: all 0.2s ease;
+      cursor: pointer;
+      border: none;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+
+    .hd-dashboard-link:hover {
+      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.35);
+      transform: translateY(-1px);
+    }
+
+    .hd-dashboard-links {
+      display: flex;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .hd-dashboard-link-secondary {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 8px 14px;
+      background: #f1f3f4;
+      color: #5f6368;
+      text-decoration: none;
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 500;
+      transition: all 0.2s ease;
+      cursor: pointer;
+      border: 1px solid #dadce0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      flex: 1;
+      text-align: center;
+    }
+
+    .hd-dashboard-link-secondary:hover {
+      background: #e8eaed;
+      color: #202124;
+    }
+
     /* Responsive for smaller screens */
     @media (max-width: 1024px) {
       #hd-right-panel {
@@ -275,8 +330,42 @@ const AI_PLATFORMS = {
   },
   gemini: {
     match: () => window.location.hostname.includes("gemini.google.com"),
-    messageSelector: '.model-response-text',
-    containerSelector: '.model-response',
+    messageSelector: 'infinite-scroller.chat-history [aria-label*="Gemini said"]',
+    containerSelector: 'infinite-scroller.chat-history',
+    // Custom finder for Gemini — the only reliable method for the current Angular DOM
+    customFinder: () => {
+      const responses = [];
+      const seen = new Set();
+
+      // Primary: Find response turns via "Gemini said" ARIA label
+      document.querySelectorAll('[aria-label*="Gemini"]').forEach(el => {
+        // Walk up to find the turn-level container (direct child of chat-history / infinite-scroller)
+        let turn = el;
+        while (turn.parentElement && turn.parentElement.tagName !== 'INFINITE-SCROLLER' && !turn.parentElement.classList.contains('chat-history')) {
+          turn = turn.parentElement;
+        }
+        if (turn && !seen.has(turn)) {
+          seen.add(turn);
+          responses.push(turn);
+        }
+      });
+
+      // Fallback: Look for containers with the action buttons (Redo/Copy) that mark model responses
+      if (responses.length === 0) {
+        document.querySelectorAll('.icon-button[aria-label="Copy"], .icon-button[aria-label="Redo"]').forEach(btn => {
+          let turn = btn;
+          while (turn.parentElement && turn.parentElement.tagName !== 'INFINITE-SCROLLER' && !turn.parentElement.classList.contains('chat-history')) {
+            turn = turn.parentElement;
+          }
+          if (turn && !seen.has(turn)) {
+            seen.add(turn);
+            responses.push(turn);
+          }
+        });
+      }
+
+      return responses;
+    },
   },
   perplexity: {
     match: () => window.location.hostname.includes("perplexity.ai"),
@@ -327,17 +416,27 @@ function init() {
 
 // Inject verify buttons
 function injectButtons(platform) {
+  // Use custom finder for Gemini, fallback to standard selectors
+  if (platform.customFinder) {
+    const containers = platform.customFinder();
+    containers.forEach((container) => {
+      if (container.querySelector(".hd-verify-btn")) return;
+      const text = container.textContent.trim();
+      if (text.length < 20) return;
+      const button = createVerifyButton(text);
+      insertButton(container, button, platform.name);
+    });
+  }
+
+  // Also try standard selectors as fallback
   const messages = document.querySelectorAll(platform.messageSelector);
-
   messages.forEach((message) => {
-    const container = message.closest(platform.containerSelector);
+    const container = message.closest(platform.containerSelector) || message;
     if (!container || container.querySelector(".hd-verify-btn")) {
-      return; // Already has button
+      return;
     }
-
     const text = message.textContent.trim();
-    if (text.length < 20) return; // Too short to verify
-
+    if (text.length < 20) return;
     const button = createVerifyButton(text);
     insertButton(container, button, platform.name);
   });
@@ -348,39 +447,43 @@ function createVerifyButton(text) {
   const button = document.createElement("button");
   button.className = "hd-verify-btn";
   button.innerHTML = `
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-      <path d="M9 11l3 3L22 4"></path>
-      <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"></path>
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+      <path d="M9 12l2 2 4-4"></path>
     </svg>
-    Verify Facts
+    Verify
   `;
 
-  // Add styles
+  // Add styles — clean, minimal, unobtrusive
   Object.assign(button.style, {
     display: "inline-flex",
     alignItems: "center",
-    gap: "6px",
-    padding: "6px 12px",
-    fontSize: "13px",
+    gap: "5px",
+    padding: "4px 10px",
+    fontSize: "12px",
     fontWeight: "500",
-    color: "#667eea",
-    background: "transparent",
-    border: "1px solid #667eea",
-    borderRadius: "6px",
+    letterSpacing: "0.2px",
+    color: "#5f6368",
+    background: "rgba(95,99,104,0.08)",
+    border: "none",
+    borderRadius: "16px",
     cursor: "pointer",
-    transition: "all 0.2s",
-    marginTop: "8px",
-    fontFamily: "inherit",
+    transition: "all 0.2s ease",
+    marginTop: "6px",
+    fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+    lineHeight: "1",
   });
 
   button.addEventListener("mouseenter", () => {
     button.style.background = "#667eea";
     button.style.color = "white";
+    button.style.boxShadow = "0 1px 4px rgba(102,126,234,0.3)";
   });
 
   button.addEventListener("mouseleave", () => {
-    button.style.background = "transparent";
-    button.style.color = "#667eea";
+    button.style.background = "rgba(95,99,104,0.08)";
+    button.style.color = "#5f6368";
+    button.style.boxShadow = "none";
   });
 
   button.addEventListener("click", (e) => {
@@ -394,13 +497,24 @@ function createVerifyButton(text) {
 
 // Insert button into container
 function insertButton(container, button, platform) {
-  // Different insertion logic per platform
-  if (platform === "chatgpt") {
-    container.appendChild(button);
-  } else if (platform === "claude") {
-    container.appendChild(button);
-  } else if (platform === "gemini") {
-    container.appendChild(button);
+  if (platform === "gemini") {
+    // Find Gemini's action bar (contains Redo, Copy, More Options buttons with mat-mdc classes)
+    const actionBtn = container.querySelector('.icon-button[aria-label="Copy"], .icon-button[aria-label="Redo"], .more-menu-button');
+    if (actionBtn) {
+      // Find the parent bar that holds these action buttons
+      const actionBar = actionBtn.closest('div');
+      if (actionBar) {
+        // Insert button as a sibling inside the action bar
+        actionBar.appendChild(button);
+        // Adjust styling to look inline with Gemini's native action buttons
+        button.style.marginTop = "0";
+        button.style.marginLeft = "8px";
+      } else {
+        container.appendChild(button);
+      }
+    } else {
+      container.appendChild(button);
+    }
   } else {
     container.appendChild(button);
   }
@@ -512,6 +626,15 @@ function showResultInPanel(data) {
         75-100: Highly reliable<br>
         50-74: Mixed reliability<br>
         0-49: Low reliability
+      </div>
+
+      <a href="http://localhost:8000/analytics" target="_blank" class="hd-dashboard-link">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"></rect><rect x="14" y="3" width="7" height="7" rx="1"></rect><rect x="3" y="14" width="7" height="7" rx="1"></rect><rect x="14" y="14" width="7" height="7" rx="1"></rect></svg>
+        Open Analytics Dashboard
+      </a>
+      <div class="hd-dashboard-links">
+        <a href="http://localhost:8000/dashboard" target="_blank" class="hd-dashboard-link-secondary">Basic Dashboard</a>
+        <a href="http://localhost:8000/docs" target="_blank" class="hd-dashboard-link-secondary">API Docs</a>
       </div>
     </div>
   `;

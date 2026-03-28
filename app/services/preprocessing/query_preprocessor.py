@@ -4,6 +4,7 @@ Extracts key factual claims from answers and determines query type.
 """
 
 import re
+import time
 from typing import Literal
 from dataclasses import dataclass
 from app.core.logging import get_logger
@@ -21,6 +22,10 @@ class ProcessedQuery:
     original_answer: str
     extracted_claims: list[str]
     query_type: QueryType
+    # Analytics metadata
+    sentences_found: int = 0
+    factual_sentences: int = 0
+    preprocessing_time_ms: int = 0
 
 
 # ── Patterns for query type detection ─────────────────────────────
@@ -281,14 +286,25 @@ class QueryPreprocessor:
             answer: AI-generated answer
 
         Returns:
-            Processed query with extracted claims and type
+            Processed query with extracted claims, type, and analytics metadata
         """
-        claims = await QueryPreprocessor.extract_claims_async(answer)
+        start = time.time()
+
+        # Split sentences and count for analytics
+        sentences = QueryPreprocessor._split_sentences(answer) if answer and len(answer.strip()) >= 10 else []
+        factual = [s for s in sentences if QueryPreprocessor._is_factual_sentence(s)]
+
+        claims = QueryPreprocessor.extract_claims(answer)
         query_type = QueryPreprocessor.determine_query_type(question)
+
+        preprocessing_time_ms = int((time.time() - start) * 1000)
 
         return ProcessedQuery(
             original_question=question,
             original_answer=answer,
             extracted_claims=claims,
-            query_type=query_type
+            query_type=query_type,
+            sentences_found=len(sentences),
+            factual_sentences=len(factual),
+            preprocessing_time_ms=preprocessing_time_ms,
         )
