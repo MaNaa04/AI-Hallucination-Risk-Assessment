@@ -207,7 +207,7 @@
     "factual_sentences": 4,
     "preprocessing_time_ms": 6,
     "retrieval_time_ms": 6143,
-    "judge_time_ms": 1774664481487
+    "judge_time_ms": 2601
   },
   {
     "request_id": "53aca019-aec9-49aa-9423-48157e89ffa2",
@@ -228,7 +228,7 @@
     "factual_sentences": 3,
     "preprocessing_time_ms": 2,
     "retrieval_time_ms": 7101,
-    "judge_time_ms": 1774664480411
+    "judge_time_ms": 1525
   },
   {
     "request_id": "9ca6592b-3de3-4121-aac8-bc919e52b6e9",
@@ -249,7 +249,7 @@
     "factual_sentences": 4,
     "preprocessing_time_ms": 32,
     "retrieval_time_ms": 7773,
-    "judge_time_ms": 1774664480426
+    "judge_time_ms": 1542
   },
   {
     "request_id": "63a8298d-6245-4093-8c79-9544c1512b5e",
@@ -270,6 +270,132 @@
     "factual_sentences": 4,
     "preprocessing_time_ms": 4,
     "retrieval_time_ms": 5,
-    "judge_time_ms": 1774664480318
+    "judge_time_ms": 1488
+  },
+  {
+    "request_id": "451fdcef-242a-4354-8ab4-bd222114f4bb",
+    "timestamp": "2026-03-28T04:53:55.073744+00:00",
+    "question_preview": "Is this statement factually accurate?",
+    "answer_preview": "The Prime Minister of India is Narendra Modi.\n\n\nHe has been in office since 26 May 2014\n\n\nLeader of the Bharatiya Janata",
+    "score": 98,
+    "verdict": "accurate",
+    "sources_used": [
+      "SerpAPI"
+    ],
+    "processing_time_ms": 3983,
+    "claims_count": 2,
+    "evidence_chars": 316,
+    "provider": "",
+    "query_type": "encyclopedic",
+    "sentences_found": 2,
+    "factual_sentences": 2,
+    "preprocessing_time_ms": 1,
+    "retrieval_time_ms": 3054,
+    "judge_time_ms": 928
+  },
+  {
+    "request_id": "d6df2ac6-858a-45b8-9518-cd2cb4ca77c6",
+    "timestamp": "2026-03-28T04:57:42.704374+00:00",
+    "question_preview": "Is this statement factually accurate?",
+    "answer_preview": "There is no \u201ccapital of Tehran\u201d because Tehran itself is already a capital city.\n\ud83d\udc49 Correct understanding:\n\n\nTehran = Cap",
+    "score": 82,
+    "verdict": "accurate",
+    "sources_used": [
+      "SerpAPI"
+    ],
+    "processing_time_ms": 2944,
+    "claims_count": 2,
+    "evidence_chars": 625,
+    "provider": "",
+    "query_type": "encyclopedic",
+    "sentences_found": 2,
+    "factual_sentences": 2,
+    "preprocessing_time_ms": 1,
+    "retrieval_time_ms": 1973,
+    "judge_time_ms": 968
+  },
+  {
+    "request_id": "20a92507-4e52-46d1-88f8-adeba9a6d6d7",
+    "timestamp": "2026-03-28T04:58:45.774675+00:00",
+    "question_preview": "Is this statement factually accurate?",
+    "answer_preview": "Here\u2019s a clear, exam-oriented breakdown of the Theory of Computation (TOC) sy",
+    "score": 32,
+    "verdict": "hallucination",
+    "sources_used": [
+      "SerpAPI"
+    ],
+    "processing_time_ms": 4722,
+    "claims_count": 1,
+    "evidence_chars": 273,
+    "provider": "",
+    "query_type": "encyclopedic",
+    "sentences_found": 1,
+    "factual_sentences": 1,
+    "preprocessing_time_ms": 0,
+    "retrieval_time_ms": 3595,
+    "judge_time_ms": 1125
+  },
+  {
+    "request_id": "e7130f2e-eeec-4efc-bf4c-924ea5c75a30",
+    "timestamp": "2026-03-28T04:59:27.378399+00:00",
+    "question_preview": "Is this statement factually accurate?",
+    "answer_preview": "Here\u2019s a clear, exam-oriented breakdown of the Theory of Computation (TOC) sy",
+    "score": 32,
+    "verdict": "hallucination",
+    "sources_used": [
+      "SerpAPI"
+    ],
+    "processing_time_ms": 575,
+    "claims_count": 1,
+    "evidence_chars": 273,
+    "provider": "",
+    "query_type": "encyclopedic",
+    "sentences_found": 1,
+    "factual_sentences": 1,
+    "preprocessing_time_ms": 0,
+    "retrieval_time_ms": 0,
+    "judge_time_ms": 573
+  },
+  {
+    "request_id": "2f9094f9-436b-47e6-b12c-172b31ddbc00",
+    "timestamp": "2026-03-28T05:00:14.145717+00:00",
+    "question_preview": "Is this statement factually accurate?",
+    "answer_preview": "\ud83c\udfcf Rohit Sharma\n4\n\ud83d\udccc Basic Info\n\n\nFull Name: Rohit Gurunath Sharma\n\n\nBorn: 30 April",
+    "score": 87,
+    "verdict": "accurate",
+    "sources_used": [
+      "SerpAPI"
+    ],
+    "processing_time_ms": 2659,
+    "claims_count": 1,
+    "evidence_chars": 309,
+    "provider": "",
+    "query_type": "encyclopedic",
+    "sentences_found": 1,
+    "factual_sentences": 1,
+    "preprocessing_time_ms": 0,
+    "retrieval_time_ms": 1952,
+    "judge_time_ms": 705
+  },
+  {
+    "request_id": "7b5d7da9-a5ac-4acf-bcf9-ac6cd2dcf4b8",
+    "timestamp": "2026-03-28T05:00:54.491008+00:00",
+    "question_preview": "Is this statement factually accurate?",
+    "answer_preview": "\ud83d\udc64 Jayant Patil\n4\n\ud83d\udccc Who he is\n\n\nSenior politician from MaharashtraNationalist Congress Party",
+    "score": 87,
+    "verdict": "accurate",
+    "sources_used": [
+      "SerpAPI"
+    ],
+    "processing_time_ms": 2344,
+    "claims_count": 1,
+    "evidence_chars": 272,
+    "provider": "",
+    "query_type": "encyclopedic",
+    "sentences_found": 1,
+    "factual_sentences": 1,
+    "preprocessing_time_ms": 0,
+    "retrieval_time_ms": 1642,
+    "judge_time_ms": 701
   }
 ]

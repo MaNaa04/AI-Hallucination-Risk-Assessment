@@ -86,14 +86,14 @@ async def verify(request: VerifyRequest) -> VerifyResponse:
             request.answer,
             aggregated_evidence
         )
-        judge_ms = int((time.time() - step_start) * 1000)
+        judge_ms = int((time.perf_counter() - step_start) * 1000)
         step_ms = judge_ms
         logger.info(
             f"[{request_id}] Step 4 complete ({step_ms}ms) | "
             f"judge_score={judge_response.score} judge_verdict={judge_response.verdict}"
         )
     except Exception as e:
-        judge_ms = int((time.time() - step_start) * 1000)
+        judge_ms = int((time.perf_counter() - step_start) * 1000)
         step_ms = judge_ms
         logger.error(
             f"[{request_id}] LLM judge failed ({step_ms}ms), "
