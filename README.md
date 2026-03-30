@@ -9,7 +9,7 @@
 
 TruthLens is a complete AI hallucination detection system that:
 
-1. **Chrome Extension** — Detects AI chat interfaces (ChatGPT, Gemini, Claude) and adds inline fact-checking, or verify any selected text via the popup
+1. **Chrome Extension** — Detects AI chat interfaces (ChatGPT, Gemini, Claude) and adds inline fact-checking, or verifies any selected text via the pop-up
 2. **Backend API** — 5-layer pipeline that extracts claims, retrieves evidence from multiple sources, and judges accuracy with an LLM
 3. **Analytics Dashboard** — Two dashboards for monitoring verification stats, preprocessing insights, and pipeline performance
 
