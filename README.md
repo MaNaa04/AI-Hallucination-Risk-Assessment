@@ -1,6 +1,6 @@
 # AI Hallucination Detection System
 
-A complete system to detect AI hallucinations using evidence-grounded verification with Wikipedia and web search sources. **Uses FREE Google Gemini API!**
+A complete system to detect AI hallucinations using evidence-grounded verification with Wikipedia and web search sources. **Uses FREE Google Gemini API.**
 
 ## Features
 
