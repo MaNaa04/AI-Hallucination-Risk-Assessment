@@ -42,11 +42,10 @@ async def verify(request: VerifyRequest) -> VerifyResponse:
         # The regex fast-path was bypassing LLM triplet extraction and producing
         # weak entity strings that failed to retrieve meaningful evidence.
         processed = await QueryPreprocessor.preprocess_async(request.question, request.answer)
-        preprocessing_ms = int((time.perf_counter() - step_start) * 1000)
-        step_ms = preprocessing_ms
+        step_ms = int((time.perf_counter() - step_start) * 1000)
         logger.info(f"[{request_id}] Preprocess complete ({step_ms}ms) | claims={len(processed.extracted_claims)}")
     except Exception as e:
-        preprocessing_ms = int((time.perf_counter() - step_start) * 1000)
+        preprocessing_ms = int((time.time() - step_start) * 1000)
         logger.error(f"[{request_id}] Preprocessing failed: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Query preprocessing failed: {str(e)}")
     
@@ -60,10 +59,9 @@ async def verify(request: VerifyRequest) -> VerifyResponse:
             processed.extracted_claims,
             processed.query_type
         )
-        retrieval_ms = int((time.perf_counter() - step_start) * 1000)
-        logger.info(f"[{request_id}] Retrieval complete ({retrieval_ms}ms) | sources={len(evidence_map)}")
+        step_ms = int((time.perf_counter() - step_start) * 1000)
+        logger.info(f"[{request_id}] Retrieval complete ({step_ms}ms) | sources={len(evidence_map)}")
     except Exception as e:
-        retrieval_ms = int((time.perf_counter() - step_start) * 1000)
         logger.warning(f"[{request_id}] Retrieval failed, continuing empty: {e}", exc_info=True)
         evidence_map = {}
     
@@ -86,14 +84,14 @@ async def verify(request: VerifyRequest) -> VerifyResponse:
             request.answer,
             aggregated_evidence
         )
-        judge_ms = int((time.perf_counter() - step_start) * 1000)
+        judge_ms = int((time.time() - step_start) * 1000)
         step_ms = judge_ms
         logger.info(
             f"[{request_id}] Step 4 complete ({step_ms}ms) | "
             f"judge_score={judge_response.score} judge_verdict={judge_response.verdict}"
         )
     except Exception as e:
-        judge_ms = int((time.perf_counter() - step_start) * 1000)
+        judge_ms = int((time.time() - step_start) * 1000)
         step_ms = judge_ms
         logger.error(
             f"[{request_id}] LLM judge failed ({step_ms}ms), "

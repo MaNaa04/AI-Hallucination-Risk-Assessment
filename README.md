@@ -70,6 +70,9 @@ TruthLens/
 ├── main.py                     # 🏁 FastAPI entrypoint
 ├── requirements.txt            # 📦 Python dependencies
 ├── .env.example                # 🔑 Environment template
+├── Dockerfile                  # 🐳 Docker image definition
+├── docker-compose.yml          # 🐙 Docker services configuration
+├── .dockerignore               # 🚫 Files to exclude from Docker build
 └── README.md                   # 📄 This file
 ```
 
@@ -82,7 +85,12 @@ TruthLens/
 ```bash
 git clone <repo-url>
 cd AI-Hallucination-Risk-Assessment
+```
 
+*(If you plan to use Docker, skip the rest of this step and go to step 2).*
+
+**For Local Python Setup:**
+```bash
 # Create virtual environment
 python -m venv venv
 source venv/bin/activate        # macOS/Linux
@@ -112,6 +120,19 @@ Edit `.env` and fill in your keys:
 
 ### 3. Start the Backend
 
+You can start the backend using either Docker (recommended) or locally with Python.
+
+#### Option A: Using Docker (Recommended)
+Make sure you have Docker and Docker Compose installed.
+```bash
+# Start the backend in the background
+docker-compose up -d --build
+
+# To stop the backend later
+docker-compose down
+```
+
+#### Option B: Locally with Python
 ```bash
 python main.py
 ```
