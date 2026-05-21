@@ -294,7 +294,7 @@ class QueryPreprocessor:
         sentences = QueryPreprocessor._split_sentences(answer) if answer and len(answer.strip()) >= 10 else []
         factual = [s for s in sentences if QueryPreprocessor._is_factual_sentence(s)]
 
-        claims = QueryPreprocessor.extract_claims(answer)
+        claims = await QueryPreprocessor.extract_claims_async(answer)
         query_type = QueryPreprocessor.determine_query_type(question)
 
         preprocessing_time_ms = int((time.time() - start) * 1000)

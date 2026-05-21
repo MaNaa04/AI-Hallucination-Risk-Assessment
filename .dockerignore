@@ -156,5 +156,8 @@ cython_debug/
 .vscode/
 .idea/
 
+# Git history (no reason to bake this into the image)
+.git/
+
 # Chrome Extension (Assuming it's not needed for the backend container)
 chrome-extension/

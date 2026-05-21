@@ -32,7 +32,16 @@ class Settings(BaseSettings):
     # Caching
     cache_enabled: bool = True
     cache_ttl_seconds: int = 3600
-    
+
+    # Redis
+    redis_url: str = "redis://localhost:6379/0"
+    redis_enabled: bool = True   # Set False to force in-memory fallback
+
+    # CORS — restrict to extension origin in production.
+    # Set ALLOWED_ORIGINS=chrome-extension://<id> in .env when Dev 1 ships auth.
+    # Comma-separated list e.g.: chrome-extension://abc123,https://yourdomain.com
+    allowed_origins: list[str] = ["*"]
+
     # Evidence Configuration
     max_evidence_tokens: int = 2000
     max_claims_per_request: int = 3
