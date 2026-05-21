@@ -3,8 +3,10 @@ Settings and configuration management.
 Loads environment variables from .env file.
 """
 
+import json
+from typing import Any
 from pydantic_settings import BaseSettings
-from pydantic import Field
+from pydantic import Field, field_validator
 from functools import lru_cache
 
 
@@ -41,7 +43,28 @@ class Settings(BaseSettings):
     # CORS — restrict to extension origin in production.
     # Set ALLOWED_ORIGINS=chrome-extension://<id> in .env when Dev 1 ships auth.
     # Comma-separated list e.g.: chrome-extension://abc123,https://yourdomain.com
-    allowed_origins: list[str] = ["*"]
+    allowed_origins: Any = ["*"]
+
+    @field_validator("allowed_origins", mode="before")
+    @classmethod
+    def parse_allowed_origins(cls, v: Any) -> list[str]:
+        """Parse allowed origins from string, JSON array, or list."""
+        if isinstance(v, str):
+            v = v.strip()
+            if not v:
+                return ["*"]
+            if v.startswith("[") and v.endswith("]"):
+                try:
+                    parsed = json.loads(v)
+                    if isinstance(parsed, list):
+                        return [str(x).strip() for x in parsed]
+                except Exception:
+                    pass
+            # Comma-separated list or single string
+            return [x.strip() for x in v.split(",") if x.strip()]
+        elif isinstance(v, list):
+            return [str(x).strip() for x in v]
+        return v
 
     # Evidence Configuration
     max_evidence_tokens: int = 2000

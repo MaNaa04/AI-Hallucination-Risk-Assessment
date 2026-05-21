@@ -5,7 +5,7 @@ All LLM API calls are mocked.
 
 import pytest
 import json
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch, MagicMock, AsyncMock
 from app.services.judge.llm_judge import LLMJudge
 from app.models.response import JudgeResponse
 
@@ -27,7 +27,7 @@ class TestBuildJudgePrompt:
         prompt = LLMJudge.build_judge_prompt(
             "What is Paris?", "Paris is a city.", ""
         )
-        assert "No evidence was retrieved" in prompt
+        assert "No external evidence was retrieved" in prompt
 
     def test_prompt_requests_json(self):
         prompt = LLMJudge.build_judge_prompt("Q", "A", "E")
@@ -93,10 +93,12 @@ class TestParseJudgeResponse:
         result = judge._parse_judge_response(raw)
         assert result.verdict == "unverifiable"
 
-    def test_no_json_raises(self):
+    def test_no_json_returns_fallback(self):
         judge = self._make_judge()
-        with pytest.raises(ValueError):
-            judge._parse_judge_response("This has no JSON at all.")
+        result = judge._parse_judge_response("This has no JSON at all.")
+        assert result.score == 50
+        assert result.verdict == "unverifiable"
+
 
 
 # ── Judge Method Tests ─────────────────────────────────────────────
@@ -104,30 +106,33 @@ class TestParseJudgeResponse:
 class TestJudge:
     """Tests for the judge() method."""
 
+    @pytest.mark.asyncio
     @patch("app.services.judge.llm_judge.get_settings")
-    def test_no_api_key_returns_neutral(self, mock_settings):
+    async def test_no_api_key_returns_neutral(self, mock_settings):
         mock_settings.return_value = MagicMock(
             llm_api_key="", llm_model="test", llm_provider="gemini"
         )
         judge = LLMJudge()
-        result = judge.judge("Q", "A", "E")
+        result = await judge.judge("Q", "A", "E")
 
         assert result.score == 50
         assert result.verdict == "unverifiable"
 
+    @pytest.mark.asyncio
     @patch("app.services.judge.llm_judge.get_settings")
-    def test_placeholder_key_returns_neutral(self, mock_settings):
+    async def test_placeholder_key_returns_neutral(self, mock_settings):
         mock_settings.return_value = MagicMock(
             llm_api_key="your_llm_api_key_here", llm_model="test", llm_provider="gemini"
         )
         judge = LLMJudge()
-        result = judge.judge("Q", "A", "E")
+        result = await judge.judge("Q", "A", "E")
 
         assert result.score == 50
         assert result.verdict == "unverifiable"
 
+    @pytest.mark.asyncio
     @patch("app.services.judge.llm_judge.get_settings")
-    def test_gemini_success(self, mock_settings):
+    async def test_gemini_success(self, mock_settings):
         mock_settings.return_value = MagicMock(
             llm_api_key="real-key", llm_model="gemini-2.0-flash", llm_provider="gemini"
         )
@@ -136,36 +141,40 @@ class TestJudge:
         judge.api_key = "real-key"
         judge.provider = "gemini"
 
-        # Mock the client's generate_content response
-        mock_response = MagicMock()
-        mock_response.text = json.dumps({
+        # Mock the AsyncOpenAI chat completions response
+        mock_choice = MagicMock()
+        mock_choice.message.content = json.dumps({
             "score": 85,
             "verdict": "verified",
             "explanation": "Evidence confirms the claim.",
             "flag": False
         })
         mock_client = MagicMock()
-        mock_client.models.generate_content.return_value = mock_response
+        mock_client.chat.completions.create = AsyncMock(return_value=MagicMock(choices=[mock_choice]))
         judge.client = mock_client
 
-        result = judge.judge("What is Paris?", "Paris is the capital.", "Paris is the capital of France.")
+        result = await judge.judge("What is Paris?", "Paris is the capital.", "Paris is the capital of France.")
 
         assert result.score == 85
         assert result.verdict == "verified"
 
+    @pytest.mark.asyncio
     @patch("app.services.judge.llm_judge.get_settings")
-    def test_api_error_returns_neutral(self, mock_settings):
+    async def test_api_error_returns_neutral(self, mock_settings):
         mock_settings.return_value = MagicMock(
             llm_api_key="real-key", llm_model="gemini-2.0-flash", llm_provider="gemini"
         )
 
         judge = LLMJudge()
-        judge.client = MagicMock()
         judge.provider = "gemini"
         judge.api_key = "real-key"
-        judge.client.generate_content.side_effect = Exception("API timeout")
+        
+        mock_client = MagicMock()
+        mock_client.chat.completions.create = AsyncMock(side_effect=Exception("API timeout"))
+        judge.client = mock_client
 
-        result = judge.judge("Q", "A", "E")
+        result = await judge.judge("Q", "A", "E")
 
         assert result.score == 50
         assert result.verdict == "unverifiable"
+

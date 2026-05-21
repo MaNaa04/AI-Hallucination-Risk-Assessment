@@ -451,7 +451,7 @@ class TestCORSEnforcement:
 
     @pytest.mark.asyncio
     async def test_cors_reflects_wildcard_for_any_origin(self):
-        """With ALLOWED_ORIGINS=[\"*\"], any origin gets the ACAO header."""
+        """With ALLOWED_ORIGINS=["*"], any origin gets the ACAO header."""
         async with _client() as c:
             resp = await c.options(
                 "/api/verify",
@@ -466,7 +466,7 @@ class TestCORSEnforcement:
     @pytest.mark.asyncio
     async def test_cors_allows_authorization_header(self):
         """
-        allow_headers=[\"*\"] in CORSMiddleware must echo the requested
+        allow_headers=["*"] in CORSMiddleware must echo the requested
         Authorization header in the Access-Control-Allow-Headers response.
         """
         async with _client() as c:
@@ -480,3 +480,139 @@ class TestCORSEnforcement:
             )
         assert resp.status_code in (200, 204)
         assert resp.headers.get("access-control-allow-headers", "") != ""
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# § 5 — /api/history endpoint & CORS Lockdown
+# ─────────────────────────────────────────────────────────────────────────────
+
+class TestHistoryEndpointSecurity:
+
+    @pytest.mark.asyncio
+    async def test_history_unauthenticated_request_rejected(self):
+        """Request without token returns 403 (HTTPBearer auto_error)."""
+        async with _client() as c:
+            resp = await c.get("/api/history")
+        assert resp.status_code == 403
+
+    @pytest.mark.asyncio
+    async def test_history_invalid_token_rejected(self):
+        """Request with invalid token returns 401."""
+        async with _client() as c:
+            resp = await c.get(
+                "/api/history",
+                headers={"Authorization": "Bearer invalidtokenhere"},
+            )
+        assert resp.status_code == 401
+        assert resp.json()["detail"] == "Authentication failed"
+
+    @pytest.mark.asyncio
+    async def test_history_authenticated_retrieval(self):
+        """Authenticated request returns list of history records."""
+        from datetime import datetime, timezone
+
+        mock_docs = [
+            {
+                "user_id": "user_test_123",
+                "request_id": str(uuid.uuid4()),
+                "question": "What is 2+2?",
+                "score": 0,
+                "verdict": "accurate",
+                "cache_hit": True,
+                "timestamp": datetime.now(timezone.utc),
+            },
+            {
+                "user_id": "user_test_123",
+                "request_id": str(uuid.uuid4()),
+                "question": "What is the capital of Spain?",
+                "score": 10,
+                "verdict": "accurate",
+                "cache_hit": False,
+                "timestamp": datetime.now(timezone.utc),
+            }
+        ]
+        
+        mock_cursor = MagicMock()
+        mock_cursor.sort = MagicMock(return_value=mock_cursor)
+        mock_cursor.skip = MagicMock(return_value=mock_cursor)
+        mock_cursor.limit = MagicMock(return_value=mock_cursor)
+        mock_cursor.to_list = AsyncMock(return_value=mock_docs)
+        
+        find_mock = MagicMock(return_value=mock_cursor)
+        with patch.object(_MOCK_COLLECTION, "find", new=find_mock):
+            async with _client() as c:
+                resp = await c.get("/api/history", headers=_bearer(sub="user_test_123"))
+                
+            assert resp.status_code == 200, resp.text
+            data = resp.json()
+            assert isinstance(data, list)
+            assert len(data) == 2
+            assert data[0]["question"] == "What is 2+2?"
+            assert data[0]["user_id"] == "user_test_123"
+            assert data[1]["question"] == "What is the capital of Spain?"
+            
+            # Verify skip & limit query parameters are passed down to repo/cursor
+            async with _client() as c:
+                await c.get("/api/history?skip=5&limit=3", headers=_bearer(sub="user_test_123"))
+            
+            find_mock.assert_called_with({"user_id": "user_test_123"})
+            mock_cursor.skip.assert_called_with(5)
+            mock_cursor.limit.assert_called_with(3)
+
+
+class TestCORSLockdown:
+
+    def test_settings_parses_allowed_origins_string(self, monkeypatch):
+        """Settings allowed_origins should parse string and lists correctly."""
+        from app.core.config import Settings
+        
+        monkeypatch.setenv("ALLOWED_ORIGINS", "chrome-extension://abcdef,https://example.com")
+        s = Settings()
+        assert s.allowed_origins == ["chrome-extension://abcdef", "https://example.com"]
+        
+        monkeypatch.setenv("ALLOWED_ORIGINS", '["chrome-extension://abcdef"]')
+        s2 = Settings()
+        assert s2.allowed_origins == ["chrome-extension://abcdef"]
+
+    @pytest.mark.asyncio
+    async def test_cors_lockdown_rejects_unallowed_origin(self):
+        """When a specific origin is enforced, other origins are rejected (no ACAO)."""
+        from fastapi import FastAPI
+        from fastapi.middleware.cors import CORSMiddleware
+        
+        test_app = FastAPI()
+        test_origins = ["chrome-extension://abcdefghijklmnopabcdefghijklmnop"]
+        
+        test_app.add_middleware(
+            CORSMiddleware,
+            allow_origins=test_origins,
+            allow_credentials=True,
+            allow_methods=["*"],
+            allow_headers=["*"],
+        )
+        
+        @test_app.get("/test")
+        def dummy():
+            return {"ok": True}
+            
+        transport = httpx.ASGITransport(app=test_app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as c:
+            # Preflight from allowed origin
+            resp = await c.options(
+                "/test",
+                headers={
+                    "Origin": "chrome-extension://abcdefghijklmnopabcdefghijklmnop",
+                    "Access-Control-Request-Method": "GET",
+                },
+            )
+            assert resp.headers.get("access-control-allow-origin") == "chrome-extension://abcdefghijklmnopabcdefghijklmnop"
+            
+            # Preflight from unallowed origin (should fail/not return ACAO)
+            resp_bad = await c.options(
+                "/test",
+                headers={
+                    "Origin": "https://evil.com",
+                    "Access-Control-Request-Method": "GET",
+                },
+            )
+            assert "access-control-allow-origin" not in resp_bad.headers

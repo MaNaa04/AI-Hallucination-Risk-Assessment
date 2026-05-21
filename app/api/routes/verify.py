@@ -348,6 +348,37 @@ async def verify(
     return final_response
 
 
+@router.get("/history", response_model=list[UserHistoryRecord])
+async def get_history(
+    request: Request,
+    skip: int = 0,
+    limit: int = 10,
+    user_id: str = Depends(get_current_user),
+) -> list[UserHistoryRecord]:
+    """
+    Retrieve paginated audit history logs for the authenticated user.
+    """
+    db = request.app.state.db
+    if db is None:
+        logger.warning("History query failed — MongoDB is not available")
+        raise HTTPException(
+            status_code=503,
+            detail="Database service not available",
+        )
+    
+    repo = UserHistoryRepository(db)
+    docs = await repo.list_for_user(user_id, skip=skip, limit=limit)
+    
+    records = []
+    for doc in docs:
+        try:
+            records.append(UserHistoryRecord(**doc))
+        except Exception as exc:
+            logger.warning(f"Failed to parse database history document: {exc}")
+            
+    return records
+
+
 @router.get("/health")
 async def health_check():
     """Health check endpoint."""
