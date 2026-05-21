@@ -10,6 +10,8 @@ from app.core.config import get_settings
 from app.core.logging import get_logger
 from app.core.http_client import create_http_client
 from app.core.cache import init_cache, close_cache
+from app.core.auth import JWTVerifier
+from app.db.mongo import init_mongo, close_mongo
 from app.api.routes.verify import router as verify_router
 from app.api.routes.analytics import router as analytics_router
 
@@ -68,12 +70,44 @@ async def lifespan(app: FastAPI):
     app.state.aggregator = EvidenceAggregator()
     logger.info("EvidenceAggregator singleton initialised")
 
+    # ── JWT Verifier (stateless; instantiated once, shared per request) ────────
+    # Tokens are minted client-side (Chrome Extension → Supabase/Firebase).
+    # We only verify signatures here — never mint tokens ourselves.
+    app.state.auth_verifier = JWTVerifier(
+        secret=settings.jwt_secret,
+        algorithm=settings.jwt_algorithm,
+    )
+    logger.info(
+        f"JWTVerifier singleton initialised (algorithm={settings.jwt_algorithm})"
+    )
+
+    # ── MongoDB async client (per-user history; decoupled from Redis) ────────
+    # Redis cache keys stay GLOBAL (verify_{sha256}) for max hit rates.
+    # Mongo is the per-user audit store; kept strictly separate.
+    try:
+        app.state.db = await init_mongo(
+            mongodb_url=settings.mongodb_url,
+            database_name=settings.database_name,
+        )
+        logger.info(
+            f"MongoDB singleton initialised — db='{settings.database_name}'"
+        )
+    except Exception as exc:
+        logger.warning(
+            f"MongoDB unavailable at startup ({exc}). "
+            "app.state.db will be None — history persistence is disabled."
+        )
+        app.state.db = None
+
     yield  # ── Application runs ──────────────────────────────────────────────
 
     # ── Shutdown: release pooled connections ─────────────────────────────────
     await app.state.http_client.aclose()
     logger.info("Shared httpx.AsyncClient closed")
     await close_cache()
+    logger.info("Redis cache closed")
+    if app.state.db is not None:
+        await close_mongo(app.state.db)
     logger.info("Shutdown complete")
 
 

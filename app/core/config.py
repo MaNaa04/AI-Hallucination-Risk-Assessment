@@ -4,6 +4,7 @@ Loads environment variables from .env file.
 """
 
 from pydantic_settings import BaseSettings
+from pydantic import Field
 from functools import lru_cache
 
 
@@ -45,7 +46,36 @@ class Settings(BaseSettings):
     # Evidence Configuration
     max_evidence_tokens: int = 2000
     max_claims_per_request: int = 3
-    
+
+    # ── JWT Authentication ────────────────────────────────────────────────────
+    # JWT_SECRET is the shared symmetric key (HS256) used by the token issuer
+    # (e.g. Supabase / Firebase) to sign tokens.  We only *verify* here —
+    # we never mint tokens ourselves.
+    jwt_secret: str = Field(
+        default="",
+        description="Shared secret for HS256 JWT verification (set via JWT_SECRET env var)",
+    )
+    jwt_algorithm: str = Field(
+        default="HS256",
+        description="JWT signing algorithm expected on incoming tokens",
+    )
+    jwt_expiry_seconds: int = Field(
+        default=3600,
+        description="Tolerated token lifetime in seconds (used for leeway checks)",
+    )
+
+    # ── MongoDB (per-user history) ────────────────────────────────────────────
+    # Kept strictly separate from Redis — Redis stays global/anonymous for
+    # maximum cache-hit rates; Mongo is the per-user audit store.
+    mongodb_url: str = Field(
+        default="mongodb://localhost:27017",
+        description="Async Motor / PyMongo connection URI",
+    )
+    database_name: str = Field(
+        default="aimatrix_db",
+        description="MongoDB database name for per-user history",
+    )
+
     class Config:
         env_file = ".env"
         case_sensitive = False
