@@ -19,6 +19,9 @@ openai>=1.3.0
 # python-jose supports HS256 (symmetric) and RS256/ES256 (asymmetric) out of the box.
 python-jose[cryptography]>=3.3.0
 
+# Rate limiting (user-scoped, not IP-based)
+slowapi>=0.1.9
+
 # Database (per-user history)
 motor>=3.3.0           # Async MongoDB driver built on top of PyMongo
 pymongo>=4.6.0         # Required by motor; also provides IndexModel helpers
