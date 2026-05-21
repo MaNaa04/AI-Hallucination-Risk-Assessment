@@ -4,14 +4,14 @@ Use this document to track which team member is responsible for which layer/comp
 
 ## Layer 1: API Gateway
 **File**: `app/api/routes/verify.py`
-**Status**: Core structure done, needs refinement
+**Status**: Completed
 **Assigned to**: 
 **Tasks**:
 - [x] Route structure
 - [x] Pydantic validation  
 - [x] Pipeline orchestration
-- [ ] Error handling refinement
-- [ ] Add request/response logging
+- [x] Error handling refinement
+- [x] Add request/response logging
 
 **Blockers**: None (can test with mocked services)
 
@@ -19,14 +19,14 @@ Use this document to track which team member is responsible for which layer/comp
 
 ## Layer 2: Query Preprocessor
 **File**: `app/services/preprocessing/query_preprocessor.py`
-**Status**: Stub with TODOs
+**Status**: Completed
 **Assigned to**: 
 **Tasks**:
-- [ ] Implement `extract_claims()` - Use either:
+- [x] Implement `extract_claims()` - Use either:
   - Regex-based + heuristics (simpler, start here)
   - Small LLM call (more accurate, add later)
-- [ ] Implement `determine_query_type()` - Classify query for routing
-- [ ] Add tests
+- [x] Implement `determine_query_type()` - Classify query for routing
+- [x] Add tests
 
 **Blockers**: None (can use test data)
 
@@ -34,14 +34,14 @@ Use this document to track which team member is responsible for which layer/comp
 
 ## Layer 3A: Wikipedia Retriever
 **File**: `app/services/retrieval/wikipedia_retriever.py`
-**Status**: Stub with TODOs
+**Status**: Completed
 **Assigned to**: 
 **Tasks**:
-- [ ] Install `wikipedia-api` library
-- [ ] Implement `search()` method
-- [ ] Extract first 2 paragraphs as evidence
-- [ ] Add error handling (timeouts, not found)
-- [ ] Add tests with mock Wikipedia responses
+- [x] Install `wikipedia-api` library
+- [x] Implement `search()` method
+- [x] Extract first 2 paragraphs as evidence
+- [x] Add error handling (timeouts, not found)
+- [x] Add tests with mock Wikipedia responses
 
 **Blockers**: None (free API, no key needed)
 
@@ -57,15 +57,15 @@ assert "France" in result["content"].lower()
 
 ## Layer 3B: SerpAPI Retriever
 **File**: `app/services/retrieval/serp_retriever.py`
-**Status**: Stub with TODOs
+**Status**: Completed
 **Assigned to**: 
 **Tasks**:
-- [ ] Install `google-search-results` library
-- [ ] Implement `search()` method
-- [ ] Extract top 3 search snippets
-- [ ] Add API key validation
-- [ ] Add error handling (invalid key, rate limits)
-- [ ] **Watch cost**: ~$0.01-0.05 per call
+- [x] Install `google-search-results` library
+- [x] Implement `search()` method
+- [x] Extract top 3 search snippets
+- [x] Add API key validation
+- [x] Add error handling (invalid key, rate limits)
+- [x] **Watch cost**: ~$0.01-0.05 per call
 
 **Blockers**: Needs SerpAPI key in `.env`
 
@@ -81,13 +81,13 @@ assert isinstance(result["results"], list)
 
 ## Layer 3C: Source Router
 **File**: `app/services/retrieval/source_router.py`
-**Status**: Routing rules defined, implementation needed
+**Status**: Completed
 **Assigned to**: 
 **Tasks**:
-- [ ] Implement `retrieve_evidence()` method
-- [ ] Call Wikipedia and/or SerpAPI based on query type
-- [ ] Handle partial failures (one source down, continue with other)
-- [ ] Add tests
+- [x] Implement `retrieve_evidence()` method
+- [x] Call Wikipedia and/or SerpAPI based on query type
+- [x] Handle partial failures (one source down, continue with other)
+- [x] Add tests
 
 **Blockers**: Needs Layer 3A and 3B implementations
 
@@ -95,13 +95,13 @@ assert isinstance(result["results"], list)
 
 ## Layer 3D: Evidence Aggregator
 **File**: `app/services/retrieval/evidence_aggregator.py`
-**Status**: Stub with TODOs
+**Status**: Completed
 **Assigned to**: 
 **Tasks**:
-- [ ] Implement `deduplicate()` - Remove duplicate snippets
-- [ ] Implement `rank_evidence()` - Prioritize by relevance
-- [ ] Implement `trim_to_budget()` - Fit within token limit
-- [ ] Add tests with various evidence inputs
+- [x] Implement `deduplicate()` - Remove duplicate snippets
+- [x] Implement `rank_evidence()` - Prioritize by relevance
+- [x] Implement `trim_to_budget()` - Fit within token limit
+- [x] Add tests with various evidence inputs
 
 **Blockers**: None (pure Python logic)
 
@@ -116,15 +116,15 @@ assert len(deduped) == 2  # "Fact A" deduplicated
 
 ## Layer 4: LLM Judge
 **File**: `app/services/judge/llm_judge.py`
-**Status**: Prompt template ready, implementation needed
+**Status**: Completed
 **Assigned to**: 
 **Tasks**:
-- [ ] Choose LLM provider (OpenAI, Anthropic, etc.)
-- [ ] Install client library
-- [ ] Implement `judge()` method to call LLM
-- [ ] Parse JSON response from LLM
-- [ ] Add error handling (timeouts, invalid JSON)
-- [ ] Add tests
+- [x] Choose LLM provider (OpenAI, Anthropic, etc.)
+- [x] Install client library
+- [x] Implement `judge()` method to call LLM
+- [x] Parse JSON response from LLM
+- [x] Add error handling (timeouts, invalid JSON)
+- [x] Add tests
 
 **Blockers**: Needs LLM API key in `.env`
 
@@ -149,13 +149,13 @@ assert 0 <= response.score <= 100
 
 ## Layer 5: Response Builder
 **File**: `app/models/response.py`
-**Status**: Mapping logic done, tested needed
+**Status**: Completed
 **Assigned to**: 
 **Tasks**:
 - [x] Create `VerifyResponse` model
 - [x] Implement `from_judge_response()` factory method
-- [ ] Add tests for score→verdict mapping
-- [ ] Verify validation works
+- [x] Add tests for score→verdict mapping
+- [x] Verify validation works
 
 **Blockers**: None (depends on Layer 4 response format)
 
@@ -175,37 +175,37 @@ assert 0 <= response.score <= 100
 
 ### Caching (Optional - Phase 2)
 **File**: `app/utils/cache.py`
-**Status**: Stub
+**Status**: Completed
 **Assigned to**: 
 **Priority**: Medium (optimize after core works)
 **Tasks**:
-- [ ] Implement in-memory caching
-- [ ] Optional: Add Redis support
+- [x] Implement in-memory caching
+- [x] Optional: Add Redis support
 
 ---
 
 ## Integration Checkpoints
 
 ### Checkpoint 1: Basic Validation (Week 1)
-- [ ] Layer 1 working (accepts requests)
-- [ ] Layer 2 working (extracts claims)
-- [ ] Can test with curl
+- [x] Layer 1 working (accepts requests)
+- [x] Layer 2 working (extracts claims)
+- [x] Can test with curl
 
 ### Checkpoint 2: Evidence Retrieval (Week 2)
-- [ ] Layer 3A working (Wikipedia)
-- [ ] Layer 3B working (SerpAPI - optional)
-- [ ] Layer 3C+D working (routing + aggregation)
+- [x] Layer 3A working (Wikipedia)
+- [x] Layer 3B working (SerpAPI - optional)
+- [x] Layer 3C+D working (routing + aggregation)
 
 ### Checkpoint 3: End-to-End Verification (Week 3)
-- [ ] Layer 4 working (LLM judge)
-- [ ] Layer 5 working (response formatting)
-- [ ] Full pipeline end-to-end ✅
+- [x] Layer 4 working (LLM judge)
+- [x] Layer 5 working (response formatting)
+- [x] Full pipeline end-to-end ✅
 
 ### Checkpoint 4: Hardening (Week 4)
-- [ ] Error handling
-- [ ] Caching
-- [ ] Tests
-- [ ] Documentation
+- [x] Error handling
+- [x] Caching
+- [x] Tests
+- [x] Documentation
 
 ---
 
@@ -242,6 +242,7 @@ POST http://localhost:8000/api/verify
 | | Layer 3 retrievers completed | |
 | | Layer 4 judge integrated | |
 | | Full pipeline tested | |
+| | Caching, Authentication, MongoDB history integration complete | |
 
 ---
 

@@ -26,6 +26,7 @@ python main.py
 ```bash
 curl -X POST "http://localhost:8000/api/verify" \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <jwt-token>" \
   -d '{"question": "What is 2+2?", "answer": "2+2 is 4"}'
 ```
 
@@ -45,28 +46,28 @@ app/
 ## Implementation Status
 
 - ✅ **Done**: Folder structure, models, routing, configuration
-- 🔧 **In Progress**: Implement TODOs in each layer
-- ⏳ **TODO**: Add tests, caching, monitoring
+- ✅ **Done**: Query preprocessor claim extraction & classification (Layer 2)
+- ✅ **Done**: Evidence retrieval via Wikipedia & SerpAPI (Layer 3)
+- ✅ **Done**: LLM judge evidence-grounded scoring & heuristic fallback (Layer 4)
+- ✅ **Done**: Global Redis caching & async MongoDB per-user history tracking
+- ✅ **Done**: Asymmetric JWT bearer token authorization & user-scoped rate limiting (20/min)
 
 ## Next Steps by Role
 
 ### Backend Developer
-1. Pick a layer from `IMPLEMENTATION_PLAN.md`
-2. Find `TODO` comments in the corresponding file
-3. Implement according to the docstrings
-4. Test locally, create PR
+1. Verify database index performance
+2. Monitor API rate limits and Redis memory consumption
+3. Extend LLM judge support to other providers (e.g. Anthropic)
 
 ### DevOps/Infra
-1. Set up CI/CD pipeline
-2. Configure environment variables in deployment
-3. Set up logging/monitoring
-4. Document deployment steps
+1. Deploy Redis and MongoDB services alongside FastAPI container
+2. Inject production keys via secure environment secrets (`LLM_API_KEY`, `SERPAPI_KEY`, `JWT_SECRET`)
+3. Lockdown `ALLOWED_ORIGINS` to the exact Chrome extension origin ID
 
 ### Frontend Developer (Extension)
-1. Call `POST /api/verify` with question and answer
-2. Parse response for score, verdict, explanation
-3. Display hallucination risk badge alongside AI answer
-4. Show "sources_used" if available
+1. Inject JWT token from Chrome session storage into `Authorization: Bearer <token>` header
+2. Handle `401 Unauthorized` and `429 Too Many Requests` API error codes gracefully
+3. Query `GET /api/history` to load the user's historical fact-checks
 
 ## API Reference
 
@@ -76,6 +77,10 @@ Verify if an answer contains hallucinations
 **URL**: `/api/verify`
 
 **Method**: `POST`
+
+**Headers**:
+- `Authorization: Bearer <jwt-token>` (Required)
+- `Content-Type: application/json`
 
 **Request Body**:
 ```json
@@ -92,18 +97,52 @@ Verify if an answer contains hallucinations
   "verdict": "accurate" | "uncertain" | "hallucination",
   "explanation": "string",
   "flag": true | false,
-  "sources_used": ["Wikipedia"] | null
+  "sources_used": ["Wikipedia"] | null,
+  "request_id": "string (UUID)",
+  "processing_time_ms": int
 }
 ```
 
 **Error Responses**:
+- 401: Authentication failed (invalid/expired JWT)
+- 403: Forbidden (missing token or invalid origin)
+- 429: Too Many Requests (user-scoped rate limit exceeded)
 - 422: Invalid input (missing fields, too short/long)
 - 500: Server error (check logs)
+
+### GET /history
+Retrieve paginated audit history logs for the authenticated user
+
+**URL**: `/api/history`
+
+**Method**: `GET`
+
+**Headers**:
+- `Authorization: Bearer <jwt-token>` (Required)
+
+**Query Parameters**:
+- `skip` (int, default `0`): Number of records to skip
+- `limit` (int, default `10`): Maximum number of records to return
+
+**Response** (200 OK):
+```json
+[
+  {
+    "user_id": "string",
+    "request_id": "string (UUID)",
+    "question": "string",
+    "score": int,
+    "verdict": "string",
+    "cache_hit": bool,
+    "timestamp": "ISO-8601 string"
+  }
+]
+```
 
 ### GET /health
 Health check endpoint
 
-**URL**: `/health`
+**URL**: `/api/health`
 
 **Response**:
 ```json
@@ -133,6 +172,7 @@ Server info
 ```bash
 curl -X POST "http://localhost:8000/api/verify" \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <jwt-token>" \
   -d '{
     "question": "What is the capital of France?",
     "answer": "The capital of France is Paris, located on the Seine River."
@@ -145,6 +185,7 @@ Expected: Score 80+, "accurate"
 ```bash
 curl -X POST "http://localhost:8000/api/verify" \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <jwt-token>" \
   -d '{
     "question": "Who is the current president of France?",
     "answer": "Vincent Van Gogh is the current president of France."
@@ -159,6 +200,9 @@ import requests
 
 response = requests.post(
     "http://localhost:8000/api/verify",
+    headers={
+        "Authorization": "Bearer your_jwt_token_here"
+    },
     json={
         "question": "What is the capital of France?",
         "answer": "Paris"

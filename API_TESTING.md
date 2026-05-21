@@ -17,7 +17,7 @@ This file documents API endpoints for testing with Postman or curl.
 
 **Name**: Health Check  
 **Method**: GET  
-**URL**: `{{base_url}}/health`  
+**URL**: `{{api_base}}/health`  
 
 ### Response
 ```json
@@ -55,6 +55,7 @@ This file documents API endpoints for testing with Postman or curl.
 ### Headers
 ```
 Content-Type: application/json
+Authorization: Bearer <jwt-token>
 ```
 
 ### Request Body
@@ -209,12 +210,45 @@ Content-Type: application/json
 
 ---
 
+## Endpoint 4: Get History
+
+**Name**: Get History  
+**Method**: GET  
+**URL**: `{{api_base}}/history`  
+
+### Headers
+```
+Authorization: Bearer <jwt-token>
+```
+
+### Query Parameters
+- `skip` (optional, integer): Number of records to skip (default: 0)
+- `limit` (optional, integer): Max number of records to return (default: 10)
+
+### Response
+```json
+[
+  {
+    "user_id": "test-user-123",
+    "request_id": "d3b07384-d113-4ec4-a55e-1ec862d8b4d8",
+    "question": "What is the capital of France?",
+    "score": 85,
+    "verdict": "accurate",
+    "cache_hit": false,
+    "timestamp": "2026-05-22T00:00:00Z"
+  }
+]
+```
+
+---
+
 ## curl Commands for Quick Testing
 
 ### Test 1: Verify with curl
 ```bash
 curl -X POST "http://localhost:8000/api/verify" \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <jwt-token>" \
   -d '{
     "question": "What is the capital of France?",
     "answer": "Paris is the capital of France."
@@ -225,6 +259,7 @@ curl -X POST "http://localhost:8000/api/verify" \
 ```bash
 curl -X POST "http://localhost:8000/api/verify" \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <jwt-token>" \
   -d '{
     "question": "Who discovered America?",
     "answer": "The Earth is located in the Andromeda Galaxy."
@@ -233,17 +268,24 @@ curl -X POST "http://localhost:8000/api/verify" \
 
 ### Test 3: Health Check
 ```bash
-curl http://localhost:8000/health
+curl http://localhost:8000/api/health
 ```
 
 ### Test 4: Pretty Print Response
 ```bash
 curl -X POST "http://localhost:8000/api/verify" \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <jwt-token>" \
   -d '{
     "question": "What is Python?",
     "answer": "Python is a programming language."
   }' | python -m json.tool
+```
+
+### Test 5: Get History with curl
+```bash
+curl -X GET "http://localhost:8000/api/history?skip=0&limit=10" \
+  -H "Authorization: Bearer <jwt-token>"
 ```
 
 ---
@@ -301,6 +343,7 @@ curl -X POST "http://localhost:8000/api/verify" \
 ```bash
 curl -X POST "http://localhost:8000/api/verify" \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <jwt-token>" \
   -d '{"question": "Test?", "answer": "Test answer"}' \
   -i
 ```
@@ -309,6 +352,7 @@ curl -X POST "http://localhost:8000/api/verify" \
 ```bash
 curl -X POST "http://localhost:8000/api/verify" \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <jwt-token>" \
   -d '{"question": "Test?", "answer": "Test answer"}' \
   -v
 ```
@@ -321,6 +365,7 @@ import json
 response = requests.post(
     "http://localhost:8000/api/verify",
     json={"question": "Test?", "answer": "Test answer"},
+    headers={"Authorization": "Bearer <jwt-token>"},
     timeout=30
 )
 

@@ -117,6 +117,14 @@ Edit `.env` and fill in your keys:
 | `WIKIPEDIA_API_ENABLED` | — | `true` (default) |
 | `MAX_CLAIMS_PER_REQUEST` | — | `3` (default) |
 | `MAX_EVIDENCE_TOKENS` | — | `800` (default) |
+| `JWT_SECRET` | ✅ | Secret key for JWT verification |
+| `JWT_ALGORITHM` | — | `HS256` (default) |
+| `JWT_EXPIRY_SECONDS` | — | `3600` (default) |
+| `MONGODB_URL` | ✅ | MongoDB connection URL |
+| `DATABASE_NAME` | — | `aimatrix_db` (default) |
+| `REDIS_URL` | — | `redis://localhost:6379/0` (default) |
+| `REDIS_ENABLED` | — | `true` (default) |
+
 
 ### 3. Start the Backend
 
@@ -196,6 +204,10 @@ The advanced analytics dashboard at `/analytics` has **5 tabs**:
 
 Verify if an AI answer contains hallucinations.
 
+**Security:**
+- Requires `Authorization: Bearer <jwt-token>` header.
+- User-scoped rate limit of `20 requests/minute` (returns `429 Too Many Requests` when exceeded).
+
 **Request:**
 ```json
 {
@@ -221,6 +233,32 @@ Verify if an AI answer contains hallucinations.
 - `75–100` → ✅ **Accurate** — verified against sources
 - `40–74` → ⚠️ **Uncertain** — partially verified or mixed evidence
 - `0–39` → 🚩 **Hallucination** — contradicted by sources
+
+### `GET /api/history`
+
+Retrieve paginated audit history logs for the authenticated user (backed by MongoDB).
+
+**Security:**
+- Requires `Authorization: Bearer <jwt-token>` header.
+
+**Query Parameters:**
+- `skip` (int, default `0`): Number of records to skip.
+- `limit` (int, default `10`): Maximum number of records to return.
+
+**Response:**
+```json
+[
+  {
+    "user_id": "user_test_123",
+    "request_id": "a1b2c3d4-...",
+    "question": "What is the capital of France?",
+    "score": 85,
+    "verdict": "accurate",
+    "cache_hit": false,
+    "timestamp": "2026-05-22T00:59:29Z"
+  }
+]
+```
 
 ### `GET /api/analytics/stats`
 Aggregate verification statistics (totals, averages, distributions).
@@ -278,9 +316,10 @@ User Input → [Layer 1: API Gateway]
 # Run tests
 python -m pytest tests/ -v
 
-# Manual test with curl
+# Manual test with curl (requires a valid JWT token matching your JWT_SECRET)
 curl -X POST "http://localhost:8000/api/verify" \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <jwt-token>" \
   -d '{"question": "Who invented the telephone?", "answer": "Alexander Graham Bell invented the telephone in 1876."}'
 ```
 
@@ -290,12 +329,16 @@ curl -X POST "http://localhost:8000/api/verify" \
 
 | Problem | Solution |
 |---------|----------|
-| **Backend won't start** | Check `.env` exists and has valid API keys |
+| **Backend won't start** | Check `.env` exists and has valid API keys / database connection strings |
 | **"Backend offline" in extension** | Make sure `python main.py` is running on port 8000 |
 | **Port 8000 in use** | Run `lsof -ti:8000 \| xargs kill -9` then restart |
 | **Score always 50** | LLM API key may be invalid or quota exceeded |
 | **No sources found** | Check `SERPAPI_KEY` is valid; verify `WIKIPEDIA_API_ENABLED=true` |
 | **Extension not loading** | Reload extension at `chrome://extensions/`, check Developer mode is ON |
+| **403 Forbidden** | Authorization header missing entirely, or invalid CORS origin |
+| **401 Unauthorized / Authentication failed** | JWT verification failed. Make sure your bearer token is valid and signed with the correct `JWT_SECRET` |
+| **429 Too Many Requests** | Rate limit of 20 requests/minute exceeded. Wait a minute and try again |
+| **503 Service Unavailable** | MongoDB database connection failed or authentication service not initialised |
 
 ---
 
@@ -308,7 +351,7 @@ curl -X POST "http://localhost:8000/api/verify" \
 | Evidence | Wikipedia API, SerpAPI |
 | Extension | Chrome Manifest V3, vanilla JS |
 | Dashboards | HTML/CSS/JS, Chart.js |
-| Data | JSON file storage (no external DB) |
+| Data | MongoDB (per-user history), Redis (global caching), JSON file storage (legacy analytics) |
 
 ---
 

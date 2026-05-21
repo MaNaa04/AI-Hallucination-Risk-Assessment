@@ -19,17 +19,24 @@ AI language models generate confident but sometimes incorrect answers. This syst
 ```
 Request: {"question": "...", "answer": "..."}
         ↓
-   [Pydantic Validation]
+   [JWT Auth Token Validation (get_current_user)]
+        ↓
+   [SlowAPI Rate Limiter (20 requests/minute)]
+        ↓
+   [Global Redis Cache Lookup (SHA-256(question + answer))]
+     ├── (HIT) ─→ Return cached response & spawn background MongoDB user audit log
+     └── (MISS)
         ↓
    [Coordinate Pipeline]
+     Call Layer 2 → Layer 3 → Layer 4 → Layer 5
         ↓
-   Call Layer 2 → Layer 3 → Layer 4 → Layer 5
+   [Spawn Background MongoDB User Audit Log]
         ↓
 Response: {"score": 0-100, "verdict": "...", ...}
 ```
 
-**Key Responsibility**: Orchestrate the entire pipeline
-**Testability**: Mock the services to test orchestration
+**Key Responsibility**: JWT Security verification, user rate limiting, global caching lookup/storage, pipeline coordination, and asynchronous per-user audit logging.
+**Testability**: Integration tests verify the end-to-end flow, caching mechanics, and auth/rate-limiting security gates.
 
 ### Layer 2: Query Preprocessor
 ```
@@ -258,71 +265,52 @@ except Exception as e:
 
 ## Performance Optimization Opportunities
 
-### 1. Caching (Low Hanging Fruit)
-- Cache evidence retrieval by claim hash
-- TTL: 1 hour (might change if configured)
-- Backend: In-memory for dev, Redis for prod
+### 1. Full-Pipeline Caching (Fully Implemented)
+- **Mechanism**: The backend caches complete verification responses using a deterministic SHA-256 hash of the concatenated question and answer.
+- **Scope**: Cached globally across all users (not user-scoped) to maximize cache-hit rates for duplicate checks.
+- **TTL Policies**:
+  - `encyclopedic`: 7 days (highly stable facts)
+  - `numeric_statistical`: 24 hours (stats updated occasionally)
+  - `recent_event`: 1 hour (news/time-sensitive facts)
+  - `opinion_subjective`: 30 minutes (subjective statements)
+  - *Error Fallbacks*: 60 seconds (temporary errors self-evict quickly)
+- **Storage**: Redis client configuration with in-memory dict fallback if Redis is disabled or unreachable.
 
-### 2. Batch Processing
-- Accept multiple Q&A pairs in single request
-- Process in parallel
-- Return batch results
-
-### 3. Async I/O
-- Wikipedia API calls can be concurrent
-- SerpAPI calls can be concurrent
-- But don't exceed rate limits
-
-### 4. Smart Routing
-- If answer length > 500 chars, extract multiple claims
-- If query type is "opinion", skip retrieval entirely
-- If score confidence high, skip SerpAPI (save $)
+### 2. Async Non-blocking Operations
+- Network operations use async/await construct (`asyncio` native) to support high concurrency.
+- Database logs (MongoDB) are persisted in the background using FastAPI `BackgroundTasks`, so response delivery is never delayed by DB I/O.
 
 ## Testing Strategy
 
-### Unit Tests
-- Test each layer independently
-- Mock external APIs (Wikipedia, SerpAPI, LLM)
-- Test edge cases (empty evidence, invalid JSON)
+### Automated Test Suite
+The codebase includes 144 automated tests that cover unit functionality, error handling, security configurations, and full end-to-end routing.
 
-### Integration Tests
-- Test full pipeline with mock services
-- Test error scenarios (API down, timeout)
-- Test various query types
-
-### End-to-End Tests
-- Test with real APIs (limited, to avoid costs)
-- Test with real LLM judge
-- Monitor latency and success rates
-
-### Test Data
-- Simple claims (Paris is capital)
-- Complex claims (historical events)
-- Recent events (2024 news)
-- Opinions/subjective claims
-- Hallucinations (false claims)
+- **Models (`tests/test_models.py`)**: 21 tests verifying Pydantic v2 schemas and validation constraints.
+- **Preprocessing (`tests/test_preprocessor.py`)**: 24 tests validating factual claim filtering and query type detection.
+- **Retrievers (`tests/test_retrievers.py`)**: 25 tests verifying Wikipedia search extraction, SerpAPI organic snippets, and smart source routing.
+- **LLM Judge (`tests/test_judge.py`)**: 14 tests verifying system prompt composition, JSON parsing robustness, and heuristic overlap fallbacks.
+- **Security Gates (`tests/test_security.py`)**: 21 tests validating JWT verification behavior, bearer scheme exceptions, and CORS whitelists.
+- **History Logs (`tests/test_auth_history.py`)**: 29 tests validating database schemas, Motor async insertion, and paginated retrieval endpoints.
+- **Full Pipeline (`tests/test_verify.py`)**: 10 integration tests mocking external APIs to verify orchestration, caching logic, and error resilience.
 
 ## Security Considerations
 
-### Input Validation
-- Validate question/answer length
-- Sanitize before passing to external APIs
-- Reject potentially harmful inputs
+### 1. Asymmetric JWT Authentication
+- Every endpoint (except `/api/health`) requires a bearer token under `Authorization: Bearer <jwt-token>`.
+- Token extraction and signature verification (HS256/RS256) are handled by a startup-initialized verifier singleton (`app.state.auth_verifier`).
+- Verification exceptions (expired tokens, signature mismatch, missing `sub`) are caught cleanly and return a structured `401 Unauthorized` response to the client.
 
-### API Keys
-- Load from environment only
-- Never log API keys
-- Rotate on schedule
+### 2. User-Scoped Rate Limiting
+- Configured using SlowAPI to prevent abuse and denial-of-service.
+- Rate limits (20 requests per minute) are keyed to the verified `user_id` extracted from the token's `sub` claim, rather than the client's IP address.
 
-### CORS
-- Currently allows all origins (dev mode)
-- Restrict to extension origin in production
-- Add rate limiting per IP
+### 3. Production CORS Whitelist
+- Allows whitelisting explicit browser extension origins (e.g. `chrome-extension://<extension-id>`) via the `ALLOWED_ORIGINS` environment variable.
+- Rejects requests from unlisted external sites in production to lock down endpoints.
 
-### Evidence Provenance
-- Track which source provided evidence
-- Cite sources in response
-- Allow users to verify sources
+### 4. Database Isolation
+- History logs are written per user, using the verified `user_id` as a partition.
+- Caching remains global and anonymous (without storing user IDs in Redis) to respect privacy and maximize cache hit coverage.
 
 ## Monitoring & Observability
 
