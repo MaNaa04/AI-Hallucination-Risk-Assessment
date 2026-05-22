@@ -1,11 +1,11 @@
-why are we storing/writing data/ responses ? to our local db?
+why are we storing/writing data/ responses to our database?
 => {
-    Why? Your project has an Analytics Dashboard (which is served at http://localhost:8000/analytics). When you visit that dashboard, the backend reads verification_events.json and calculates statistics like "Average Score", "Verdict Distribution", and "Pipeline Processing Times". If you don't store this data, your analytics dashboard will always be empty!
+    Why? Your project has a local analytics JSON logger (for http://localhost:8000/analytics) and a production MongoDB audit logs database for per-user history tracking (accessed via GET /api/history). MongoDB stores user-scoped query/result logs asynchronously via BackgroundTasks to prevent database I/O from affecting request latency.
 }
 
-docker solves it -> mapping to to soem folder called data.
-->we need to map  local data folder to the container's data folder using a "Volume"
+docker solves it -> mapping to some folder called data.
+-> we need to map local data folder to the container's data folder using a "Volume"
 ---------------------------------------------------------------
 NOTE:
-Your API caching using cachetools in app/core/cache.py is entirely in-memory, so cache will be cleared when the container restarts. This is standard behavior and perfectly fine).
+The API caching (implemented in app/core/cache.py) defaults to Redis in production. When Redis is enabled, keys are cached globally across all instances. If Redis is unavailable or disabled, the application falls back gracefully to a thread-safe, local, in-memory TTLCache.
 ------------------------------------------------------

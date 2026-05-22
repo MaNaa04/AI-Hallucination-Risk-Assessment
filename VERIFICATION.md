@@ -26,25 +26,28 @@ Start the server:
 python main.py
 ```
 
-In another terminal:
+In another terminal (ensure you have a valid JWT token matching the configured `JWT_SECRET` on the backend):
 
 ```bash
 # ✅ Valid request → 200 with score, verdict, request_id, processing_time_ms
 curl -s -X POST http://localhost:8000/api/verify \
   -H 'Content-Type: application/json' \
+  -H 'Authorization: Bearer <jwt-token>' \
   -d '{"question": "What is the capital of France?", "answer": "Paris is the capital of France."}' | python3 -m json.tool
 
 # ❌ Question too short → 422
 curl -s -X POST http://localhost:8000/api/verify \
   -H 'Content-Type: application/json' \
+  -H 'Authorization: Bearer <jwt-token>' \
   -d '{"question": "Hi", "answer": "Paris is the capital of France."}' | python3 -m json.tool
 
 # ❌ Missing field → 422
 curl -s -X POST http://localhost:8000/api/verify \
   -H 'Content-Type: application/json' \
+  -H 'Authorization: Bearer <jwt-token>' \
   -d '{"question": "What is the capital of France?"}' | python3 -m json.tool
 
-# 💚 Health check → {"status": "ok"}
+# 💚 Health check (no auth required) → {"status": "ok"}
 curl -s http://localhost:8000/api/health | python3 -m json.tool
 ```
 
@@ -52,12 +55,13 @@ curl -s http://localhost:8000/api/health | python3 -m json.tool
 
 Visit **http://localhost:8000/docs** for Swagger UI.
 
-### Expected Output (Stubs Active)
+### Expected Output (Production Mode)
 
-Since Layers 3-4 are stubs, valid requests return:
-- `score: 50`, `verdict: "uncertain"` (neutral default from stub judge)
-- `request_id` (UUID) and `processing_time_ms`
-- Server logs show claim extraction and query type from Layer 2
+Since all layers are fully implemented, valid requests return:
+- Fact-grounded `score`, `verdict`, and `explanation` from the LLM judge.
+- `request_id` (UUID) and `processing_time_ms`.
+- Subsequent identical requests return in `<5ms` due to global Redis caching.
+- Server logs show the request_id tracing across all 5 layers of the pipeline.
 
 ---
 
@@ -143,19 +147,44 @@ cp .env.example .env
 
 ### Full Pipeline Test
 
-With a valid `.env`, restart the server and test end-to-end:
+With a valid `.env` and database setup, restart the server and test end-to-end:
 
 ```bash
 python main.py
 ```
 
 ```bash
+# Verify claims (requires a valid JWT token)
 curl -s -X POST http://localhost:8000/api/verify \
   -H 'Content-Type: application/json' \
+  -H 'Authorization: Bearer <jwt-token>' \
   -d '{"question": "What is the capital of France?", "answer": "Paris is the capital of France."}' | python3 -m json.tool
 ```
 
-**Expected**: Real score, verdict, explanation from LLM judge (not 50/unverifiable)
+**Expected**: Real score, verdict, explanation from LLM judge.
+
+---
+
+## Security & History Audit Logs
+
+### Automated Tests
+```bash
+python -m pytest tests/test_security.py tests/test_auth_history.py -v
+```
+**Expected**: 50 tests pass (21 security + 29 history validation)
+
+### Manual Testing
+
+Ensure your MongoDB instance is running (or configured in `.env`). Perform a few verification requests first to populate the history.
+
+```bash
+# 1. Retrieve history (authenticated) → returns list of user history records
+curl -s -X GET "http://localhost:8000/api/history?skip=0&limit=5" \
+  -H 'Authorization: Bearer <jwt-token>' | python3 -m json.tool
+
+# 2. Retrieve history (unauthenticated) → returns 403 Forbidden
+curl -s -X GET "http://localhost:8000/api/history" | python3 -m json.tool
+```
 
 ---
 
@@ -165,4 +194,4 @@ curl -s -X POST http://localhost:8000/api/verify \
 python -m pytest tests/ -v
 ```
 
-**Expected**: 94 tests pass
+**Expected**: 144 tests pass

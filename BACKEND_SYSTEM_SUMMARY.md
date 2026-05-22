@@ -3,7 +3,7 @@
 > **Status**: ✅ Backend Fully Implemented & Running  
 > **Version**: 0.1.0  
 > **Updated**: March 2026  
-> **Stack**: Python · FastAPI · Pydantic v2 · Google Gemini / OpenAI / Groq / Grok · Wikipedia-API · SerpAPI
+> **Stack**: Python · FastAPI · Pydantic v2 · Google Gemini / OpenAI / Groq / Grok · Wikipedia-API · SerpAPI · Redis · MongoDB
 
 ---
 
@@ -562,16 +562,18 @@ The system is designed so that **only a preprocessing crash returns an error**. 
 
 ---
 
-## 12. Caching (`app/utils/cache.py`)
+## 12. Caching (`app/core/cache.py`)
 
-A `CacheManager` skeleton is implemented with:
-- In-memory dict store
-- TTL awareness (structure in place, TTL eviction logic marked `TODO`)
-- Global singleton `cache_manager` instance
-
-**Next step**: Wire it into the retrieval layer — cache `(claim, source) → evidence` with `CACHE_TTL_SECONDS` (default 1 hour) to avoid duplicate API calls for the same query.
-
-**Production path**: Swap the in-memory dict for a Redis client (dependency already in `requirements.txt`).
+A fully implemented production cache layer:
+- **Primary**: Redis client configuration with TTL eviction handled server-side.
+- **Fallback**: Thread-safe in-memory `cachetools.TTLCache` (max 1000 items, 1-hour default TTL) using an `asyncio.Lock` to serialize concurrent coroutine access.
+- **Cache Key**: `verify_{SHA-256(question + answer)}` is global across all users to maximize cache hit coverage.
+- **TTL Policies**:
+  - `encyclopedic`: 7 days
+  - `numeric_statistical`: 24 hours
+  - `recent_event`: 1 hour
+  - `opinion_subjective`: 30 minutes
+  - *Error Fallbacks*: 60 seconds (temporary errors self-evict quickly)
 
 ---
 
@@ -609,11 +611,11 @@ This table maps the original design decisions from the planning phase to their a
 | Pydantic v2 models | ✅ Implemented | Full validation |
 | UUID request tracing | ✅ Implemented | Per-request UUID in logs + response |
 | Per-step timing | ✅ Implemented | Millisecond timing logged per step |
-| Caching layer | 🔶 Skeleton only | Structure in place, TTL eviction TODO |
-| Async I/O for retrieval | 🔶 Synchronous | Sync for now; async optimization future |
+| Caching layer | ✅ Fully built | Redis primary with in-memory TTL fallback |
+| Async I/O for retrieval | ✅ Async parallel I/O | Fully async retrievers using httpx.AsyncClient |
 | Anthropic/Claude support | 🔶 Dependency installed | Not wired in LLMJudge yet |
 | Per-claim scoring | ❌ Not implemented | Single score per request (simpler UX) |
-| Redis caching | ❌ Not implemented | Dependency installed, not wired |
+| Redis caching | ✅ Implemented | Configured via REDIS_URL/REDIS_ENABLED settings |
 
 ---
 

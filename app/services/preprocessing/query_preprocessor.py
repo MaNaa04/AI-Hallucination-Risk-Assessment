@@ -308,3 +308,32 @@ class QueryPreprocessor:
             factual_sentences=len(factual),
             preprocessing_time_ms=preprocessing_time_ms,
         )
+
+    @staticmethod
+    def extract_claims(answer: str, max_claims: int = 3) -> list[str]:
+        """Synchronous compatibility wrapper for tests."""
+        import asyncio
+        try:
+            return asyncio.run(QueryPreprocessor.extract_claims_async(answer, max_claims))
+        except RuntimeError:
+            from concurrent.futures import ThreadPoolExecutor
+            with ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(
+                    lambda: asyncio.run(QueryPreprocessor.extract_claims_async(answer, max_claims))
+                )
+                return future.result()
+
+    @staticmethod
+    def preprocess(question: str, answer: str) -> ProcessedQuery:
+        """Synchronous compatibility wrapper for tests."""
+        import asyncio
+        try:
+            return asyncio.run(QueryPreprocessor.preprocess_async(question, answer))
+        except RuntimeError:
+            from concurrent.futures import ThreadPoolExecutor
+            with ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(
+                    lambda: asyncio.run(QueryPreprocessor.preprocess_async(question, answer))
+                )
+                return future.result()
+
