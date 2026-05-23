@@ -129,15 +129,20 @@ EVIDENCE: {evidence}"""
     def _parse_judge_response(self, raw_text: str) -> JudgeResponse:
         """Parse LLM response text into JudgeResponse."""
         try:
-            # Strip markdown code fences if any (some models wrap JSON in ```json ... ```)
-            cleaned = re.sub(r'^```(?:json)?\s*|\s*```$', '', raw_text.strip(), flags=re.MULTILINE)
-            # Find first JSON object in the response
-            json_match = re.search(r'\{.*\}', cleaned, re.DOTALL)
-            if not json_match:
-                logger.error(f"No JSON object found in LLM response: {raw_text[:200]}")
-                return self._heuristic_judge("unknown", "unknown", "unknown")
+            # Strip markdown code fences if any
+            cleaned = re.sub(r'^```(?:json)?\s*|\s*```$', '', raw_text.strip(), flags=re.MULTILINE).strip()
+            
+            # Try to load the entire cleaned string first
+            try:
+                data = json.loads(cleaned)
+            except json.JSONDecodeError:
+                # Fallback to finding the first JSON object
+                json_match = re.search(r'\{.*\}', cleaned, re.DOTALL)
+                if not json_match:
+                    logger.error(f"No JSON object found in LLM response: {raw_text[:200]}")
+                    return self._heuristic_judge("unknown", "unknown", "unknown")
+                data = json.loads(json_match.group(0))
 
-            data = json.loads(json_match.group(0))
             score = int(data.get("score", 50))
 
             # Clamp to valid range

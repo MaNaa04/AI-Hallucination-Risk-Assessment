@@ -57,3 +57,4 @@ Thumbs.db
 # Project specific
 .cache/
 redis_dump.rdb
+data/

@@ -1,10 +1,18 @@
 """
 Source Router - Layer 3C
 Routes queries to appropriate retrievers based on query type using asyncio.gather.
+
+Key async upgrade (Task 1):
+- Accepts a shared httpx.AsyncClient and passes it down to each retriever so
+  the entire retrieval layer uses a single pooled connection manager.
+- asyncio.gather now uses return_exceptions=True so a single failing task
+  cannot propagate an unhandled exception and silently cancel the entire batch.
+  Exception objects are filtered out before results are recombined.
 """
 
 import asyncio
-from typing import Literal
+import httpx
+from typing import Optional
 from app.core.logging import get_logger
 from app.services.retrieval.wikipedia_retriever import WikipediaRetriever
 from app.services.retrieval.serp_retriever import SerpAPIRetriever
@@ -15,29 +23,47 @@ logger = get_logger(__name__)
 class SourceRouter:
     """
     Routes queries to appropriate retrieval sources concurrently via asyncio.gather.
+
+    Accepts an optional shared httpx.AsyncClient that is forwarded to all
+    retrievers. Pass None to let each retriever create its own client (useful
+    for tests or standalone use).
     """
 
-    def __init__(self):
-        """Initialize retrievers."""
-        self.wikipedia = WikipediaRetriever()
-        self.serpapi = SerpAPIRetriever()
+    def __init__(self, http_client: Optional[httpx.AsyncClient] = None):
+        """
+        Initialise SourceRouter with retrievers.
 
-    def get_sources_for_query_type(
-        self, query_type: str
-    ) -> list[str]:
-        """Determine which sources to query."""
+        Args:
+            http_client: Optional shared AsyncClient from app.state.
+                         Forwarded to WikipediaRetriever and SerpAPIRetriever
+                         so the entire retrieval layer shares one connection pool.
+        """
+        self.wikipedia = WikipediaRetriever(http_client=http_client)
+        self.serpapi = SerpAPIRetriever(http_client=http_client)
+
+    # ── Routing rules ────────────────────────────────────────────────────────
+
+    def get_sources_for_query_type(self, query_type: str) -> list[str]:
+        """Determine which sources to query based on the classified query type."""
         routing_rules = {
             "encyclopedic": ["wikipedia", "serpapi"],
             "recent_event": ["serpapi", "wikipedia"],
             "numeric_statistical": ["wikipedia", "serpapi"],
-            "opinion_subjective": [],  # Skip retrieval
+            "opinion_subjective": [],  # Skip retrieval entirely
         }
+        return routing_rules.get(query_type, ["wikipedia"])
 
-        sources = routing_rules.get(query_type, ["wikipedia"])
-        return sources
+    # ── Retrieval ────────────────────────────────────────────────────────────
 
-    async def _retrieve_from_source(self, source: str, claim: str) -> tuple[str, str | None]:
-        """Retrieve evidence from a single source."""
+    async def _retrieve_from_source(
+        self, source: str, claim: str
+    ) -> tuple[str, Optional[str]]:
+        """
+        Retrieve evidence from a single source for a single claim.
+
+        Returns a (source_name, evidence_text_or_None) tuple so the gather
+        result can be recombined by source regardless of order.
+        """
         try:
             if source == "wikipedia":
                 evidence = await self.wikipedia.get_evidence(claim)
@@ -48,42 +74,63 @@ class SourceRouter:
             else:
                 return (source, None)
         except Exception as e:
-            logger.error(f"Async retrieval from {source} failed for '{claim}': {e}")
+            logger.error(f"Retrieval from '{source}' failed for claim '{claim}': {e}")
             return (source, None)
 
     async def retrieve_evidence(
         self, claims: list[str], query_type: str
     ) -> dict:
         """
-        Parallel fetch evidence for all claims.
+        Parallel-fetch evidence for all claims across all relevant sources.
+
+        Fans out every (claim × source) combination simultaneously using
+        asyncio.gather. For N claims and M sources this fires N*M tasks
+        concurrently so total wall time ≈ max(individual task time).
+
+        Uses return_exceptions=True so a single task raising an unexpected
+        exception does not propagate up and cancel the sibling tasks.
+        Exception objects are filtered out before results are recombined.
+
+        Args:
+            claims:     List of extracted claim strings to look up.
+            query_type: Classified query type used to select sources.
+
+        Returns:
+            Dict mapping source name → concatenated evidence string.
+            Empty dict if no claims, no sources, or all fetches failed.
         """
         sources = self.get_sources_for_query_type(query_type)
         if not claims or not sources:
             return {}
 
-        logger.info(f"Parallel fetching: {len(claims)} claims × {len(sources)} sources")
+        logger.info(
+            f"Parallel fetching: {len(claims)} claims × {len(sources)} sources "
+            f"= {len(claims) * len(sources)} concurrent tasks"
+        )
 
-        tasks = []
-        # Span all combinations into event loop
-        for claim in claims:
-            for source in sources:
-                task = asyncio.create_task(self._retrieve_from_source(source, claim))
-                tasks.append(task)
+        # Build all (claim, source) task combinations
+        tasks = [
+            asyncio.create_task(self._retrieve_from_source(source, claim))
+            for claim in claims
+            for source in sources
+        ]
 
-        # Fire simultaneously
-        results = await asyncio.gather(*tasks)
+        # Fire simultaneously — return_exceptions=True ensures one bad task
+        # cannot silently abort the entire gather batch
+        raw_results = await asyncio.gather(*tasks, return_exceptions=True)
 
-        # Recombine evidence
+        # Recombine evidence, skipping any tasks that raised exceptions
         evidence_map: dict[str, list[str]] = {}
-        for source_name, evidence in results:
+        for result in raw_results:
+            if isinstance(result, Exception):
+                logger.error(f"Gather caught unexpected task exception: {result}")
+                continue
+            source_name, evidence = result
             if evidence:
-                if source_name not in evidence_map:
-                    evidence_map[source_name] = []
-                evidence_map[source_name].append(evidence)
+                evidence_map.setdefault(source_name, []).append(evidence)
 
-        # Join per source
-        final_map = {}
-        for source_name, evidence_list in evidence_map.items():
-            final_map[source_name] = "\n\n".join(evidence_list)
-
-        return final_map
+        # Join per source into a single string ready for the aggregator
+        return {
+            source_name: "\n\n".join(evidence_list)
+            for source_name, evidence_list in evidence_map.items()
+        }

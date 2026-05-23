@@ -76,6 +76,14 @@ class VerifyResponse(BaseModel):
         default=None,
         description="Total pipeline processing time in milliseconds"
     )
+    cache_hit: bool = Field(
+        default=False,
+        description=(
+            "True if this result was served from the Redis cache (no LLM call was made). "
+            "False if the full pipeline ran and a fresh LLM judgment was produced. "
+            "Use this field to filter out cached results when benchmarking LLM quality."
+        )
+    )
     debug: Optional[dict] = Field(
         default=None,
         description="Debug info detailing exactly what evidence snippets were retrieved"
@@ -88,6 +96,7 @@ class VerifyResponse(BaseModel):
         request_id: Optional[str] = None,
         processing_time_ms: Optional[int] = None,
         debug: Optional[dict] = None,
+        cache_hit: bool = False,
     ) -> "VerifyResponse":
         """
         Convert LLM Judge response to user-facing response.
@@ -119,6 +128,7 @@ class VerifyResponse(BaseModel):
             sources_used=sources,
             request_id=request_id,
             processing_time_ms=processing_time_ms,
+            cache_hit=cache_hit,
             debug=debug,
         )
     
@@ -131,6 +141,7 @@ class VerifyResponse(BaseModel):
                 "flag": False,
                 "sources_used": ["Wikipedia"],
                 "request_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
-                "processing_time_ms": 1250
+                "processing_time_ms": 1250,
+                "cache_hit": False,
             }
         }

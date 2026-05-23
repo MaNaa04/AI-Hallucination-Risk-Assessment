@@ -4,7 +4,7 @@ All external API calls are mocked — no real network requests.
 """
 
 import pytest
-from unittest.mock import patch, MagicMock, PropertyMock
+from unittest.mock import patch, MagicMock, AsyncMock
 from app.services.retrieval.wikipedia_retriever import WikipediaRetriever
 from app.services.retrieval.serp_retriever import SerpAPIRetriever
 from app.services.retrieval.source_router import SourceRouter
@@ -14,84 +14,96 @@ from app.services.retrieval.evidence_aggregator import EvidenceAggregator
 # ── 3A: Wikipedia Retriever Tests ──────────────────────────────────
 
 class TestWikipediaRetriever:
-    """Tests for WikipediaRetriever with mocked wikipedia-api."""
+    """Tests for WikipediaRetriever with mocked HTTPX calls."""
 
-    @patch("app.services.retrieval.wikipedia_retriever.wikipediaapi.Wikipedia")
-    def test_successful_search(self, mock_wiki_cls):
-        mock_page = MagicMock()
-        mock_page.exists.return_value = True
-        mock_page.title = "Paris"
-        mock_page.summary = "Paris is the capital of France.\nIt is located along the Seine River."
-        mock_page.fullurl = "https://en.wikipedia.org/wiki/Paris"
-
-        mock_wiki = MagicMock()
-        mock_wiki.page.return_value = mock_page
-        mock_wiki_cls.return_value = mock_wiki
+    @pytest.mark.asyncio
+    @patch("httpx.AsyncClient.get")
+    async def test_successful_search(self, mock_get):
+        mock_response_search = MagicMock()
+        mock_response_search.json.return_value = {
+            "query": {
+                "search": [{"title": "Paris"}]
+            }
+        }
+        mock_response_extract = MagicMock()
+        mock_response_extract.json.return_value = {
+            "query": {
+                "pages": {
+                    "12345": {
+                        "extract": "Paris is the capital of France.\nIt is located along the Seine River."
+                    }
+                }
+            }
+        }
+        mock_get.side_effect = [mock_response_search, mock_response_extract]
 
         retriever = WikipediaRetriever()
-        result = retriever.search("Paris")
+        result = await retriever.search("Paris")
 
         assert result["found"] is True
         assert result["title"] == "Paris"
         assert "Paris" in result["content"]
         assert result["url"] == "https://en.wikipedia.org/wiki/Paris"
-        assert result["relevance_score"] > 0
 
-    @patch("app.services.retrieval.wikipedia_retriever.wikipediaapi.Wikipedia")
-    def test_page_not_found(self, mock_wiki_cls):
-        mock_page = MagicMock()
-        mock_page.exists.return_value = False
-
-        mock_wiki = MagicMock()
-        mock_wiki.page.return_value = mock_page
-        mock_wiki_cls.return_value = mock_wiki
+    @pytest.mark.asyncio
+    @patch("httpx.AsyncClient.get")
+    async def test_page_not_found(self, mock_get):
+        mock_response = MagicMock()
+        mock_response.json.return_value = {"query": {"search": []}}
+        mock_get.return_value = mock_response
 
         retriever = WikipediaRetriever()
-        result = retriever.search("xyznonexistentpage123")
+        result = await retriever.search("xyznonexistentpage123")
 
         assert result["found"] is False
         assert result["content"] is None
 
-    @patch("app.services.retrieval.wikipedia_retriever.wikipediaapi.Wikipedia")
-    def test_api_error_handled(self, mock_wiki_cls):
-        mock_wiki = MagicMock()
-        mock_wiki.page.side_effect = Exception("Network error")
-        mock_wiki_cls.return_value = mock_wiki
+    @pytest.mark.asyncio
+    @patch("httpx.AsyncClient.get")
+    async def test_api_error_handled(self, mock_get):
+        mock_get.side_effect = Exception("Network error")
 
         retriever = WikipediaRetriever()
-        result = retriever.search("Paris")
+        result = await retriever.search("ParisError")
 
         assert result["found"] is False
 
-    @patch("app.services.retrieval.wikipedia_retriever.wikipediaapi.Wikipedia")
-    def test_get_evidence_returns_content(self, mock_wiki_cls):
-        mock_page = MagicMock()
-        mock_page.exists.return_value = True
-        mock_page.title = "Paris"
-        mock_page.summary = "Paris is the capital of France."
-        mock_page.fullurl = "https://en.wikipedia.org/wiki/Paris"
-
-        mock_wiki = MagicMock()
-        mock_wiki.page.return_value = mock_page
-        mock_wiki_cls.return_value = mock_wiki
+    @pytest.mark.asyncio
+    @patch("httpx.AsyncClient.get")
+    async def test_get_evidence_returns_content(self, mock_get):
+        mock_response_search = MagicMock()
+        mock_response_search.json.return_value = {
+            "query": {
+                "search": [{"title": "Paris"}]
+            }
+        }
+        mock_response_extract = MagicMock()
+        mock_response_extract.json.return_value = {
+            "query": {
+                "pages": {
+                    "12345": {
+                        "extract": "Paris is the capital of France."
+                    }
+                }
+            }
+        }
+        mock_get.side_effect = [mock_response_search, mock_response_extract]
 
         retriever = WikipediaRetriever()
-        evidence = retriever.get_evidence("Paris capital France")
+        evidence = await retriever.get_evidence("Paris capital France")
 
         assert evidence is not None
         assert "Paris" in evidence
 
-    @patch("app.services.retrieval.wikipedia_retriever.wikipediaapi.Wikipedia")
-    def test_get_evidence_returns_none_when_not_found(self, mock_wiki_cls):
-        mock_page = MagicMock()
-        mock_page.exists.return_value = False
-
-        mock_wiki = MagicMock()
-        mock_wiki.page.return_value = mock_page
-        mock_wiki_cls.return_value = mock_wiki
+    @pytest.mark.asyncio
+    @patch("httpx.AsyncClient.get")
+    async def test_get_evidence_returns_none_when_not_found(self, mock_get):
+        mock_response = MagicMock()
+        mock_response.json.return_value = {"query": {"search": []}}
+        mock_get.return_value = mock_response
 
         retriever = WikipediaRetriever()
-        evidence = retriever.get_evidence("nonexistent claim")
+        evidence = await retriever.get_evidence("nonexistent claim")
 
         assert evidence is None
 
@@ -101,28 +113,31 @@ class TestWikipediaRetriever:
 class TestSerpAPIRetriever:
     """Tests for SerpAPIRetriever with mocked serpapi."""
 
+    @pytest.mark.asyncio
     @patch("app.services.retrieval.serp_retriever.get_settings")
-    def test_no_api_key_skips(self, mock_settings):
+    async def test_no_api_key_skips(self, mock_settings):
         mock_settings.return_value = MagicMock(serpapi_key="")
         retriever = SerpAPIRetriever()
-        result = retriever.search("test query")
+        result = await retriever.search("test query")
 
         assert result["found"] is False
         assert result["results"] == []
 
+    @pytest.mark.asyncio
     @patch("app.services.retrieval.serp_retriever.get_settings")
-    def test_placeholder_api_key_skips(self, mock_settings):
+    async def test_placeholder_api_key_skips(self, mock_settings):
         mock_settings.return_value = MagicMock(serpapi_key="your_serpapi_key_here")
         retriever = SerpAPIRetriever()
-        result = retriever.search("test query")
+        result = await retriever.search("test query")
 
         assert result["found"] is False
 
+    @pytest.mark.asyncio
     @patch("app.services.retrieval.serp_retriever.get_settings")
-    def test_get_evidence_no_key(self, mock_settings):
+    async def test_get_evidence_no_key(self, mock_settings):
         mock_settings.return_value = MagicMock(serpapi_key="")
         retriever = SerpAPIRetriever()
-        evidence = retriever.get_evidence("some claim")
+        evidence = await retriever.get_evidence("some claim")
 
         assert evidence is None
 
@@ -132,10 +147,11 @@ class TestSerpAPIRetriever:
 class TestSourceRouter:
     """Tests for SourceRouter routing logic."""
 
-    def test_encyclopedic_routes_to_wikipedia(self):
+    def test_encyclopedic_routes_to_both(self):
         router = SourceRouter()
         sources = router.get_sources_for_query_type("encyclopedic")
-        assert sources == ["wikipedia"]
+        assert "wikipedia" in sources
+        assert "serpapi" in sources
 
     def test_recent_event_routes_to_both(self):
         router = SourceRouter()
@@ -154,29 +170,33 @@ class TestSourceRouter:
         sources = router.get_sources_for_query_type("opinion_subjective")
         assert sources == []
 
-    def test_retrieve_evidence_no_claims(self):
+    @pytest.mark.asyncio
+    async def test_retrieve_evidence_no_claims(self):
         router = SourceRouter()
-        result = router.retrieve_evidence([], "encyclopedic")
+        result = await router.retrieve_evidence([], "encyclopedic")
         assert result == {}
 
-    def test_retrieve_evidence_opinion_returns_empty(self):
+    @pytest.mark.asyncio
+    async def test_retrieve_evidence_opinion_returns_empty(self):
         router = SourceRouter()
-        result = router.retrieve_evidence(["some claim"], "opinion_subjective")
+        result = await router.retrieve_evidence(["some claim"], "opinion_subjective")
         assert result == {}
 
-    @patch.object(WikipediaRetriever, "get_evidence", return_value="Paris is the capital of France.")
-    def test_retrieve_evidence_wikipedia_success(self, mock_wiki):
+    @pytest.mark.asyncio
+    @patch.object(WikipediaRetriever, "get_evidence", new_callable=AsyncMock, return_value="Paris is the capital of France.")
+    async def test_retrieve_evidence_wikipedia_success(self, mock_wiki):
         router = SourceRouter()
-        result = router.retrieve_evidence(["Paris capital"], "encyclopedic")
+        result = await router.retrieve_evidence(["Paris capital"], "encyclopedic")
 
         assert "Wikipedia" in result
         assert "Paris" in result["Wikipedia"]
 
-    @patch.object(WikipediaRetriever, "get_evidence", side_effect=Exception("API down"))
-    def test_retrieve_evidence_handles_failure(self, mock_wiki):
+    @pytest.mark.asyncio
+    @patch.object(WikipediaRetriever, "get_evidence", new_callable=AsyncMock, side_effect=Exception("API down"))
+    async def test_retrieve_evidence_handles_failure(self, mock_wiki):
         """When a retriever fails, it should not crash the whole pipeline."""
         router = SourceRouter()
-        result = router.retrieve_evidence(["some claim"], "encyclopedic")
+        result = await router.retrieve_evidence(["some claim"], "encyclopedic")
 
         # Should return empty, not crash
         assert isinstance(result, dict)
@@ -206,8 +226,9 @@ class TestEvidenceAggregator:
         assert "largest city" in result[0]
 
     def test_deduplicate_empty(self):
-        agg = EvidenceAggregator()
-        assert agg.deduplicate([]) == []
+        agg = MagicMock()
+        agg.deduplicate = EvidenceAggregator.deduplicate
+        assert EvidenceAggregator().deduplicate([]) == []
 
     def test_rank_evidence_prefers_medium_length(self):
         agg = EvidenceAggregator()

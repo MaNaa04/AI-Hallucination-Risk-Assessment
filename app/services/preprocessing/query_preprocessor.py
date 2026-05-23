@@ -234,36 +234,6 @@ class QueryPreprocessor:
         return result
 
     @staticmethod
-    def extract_claims(answer: str, max_claims: int = 3) -> list[str]:
-        """
-        Synchronous heuristic claim extraction (no LLM).
-        Splits sentences, filters factual ones, cleans into search queries.
-
-        Args:
-            answer: The AI-generated answer
-            max_claims: Maximum number of claims to return
-
-        Returns:
-            List of extracted claims as search queries
-        """
-        settings = get_settings()
-        max_claims = min(max_claims, settings.max_claims_per_request)
-
-        if not answer or len(answer.strip()) < 10:
-            logger.warning("Answer too short for claim extraction")
-            return []
-
-        sentences = QueryPreprocessor._split_sentences(answer)
-        factual = [s for s in sentences if QueryPreprocessor._is_factual_sentence(s)]
-        claims = [QueryPreprocessor._clean_claim(s) for s in factual]
-        claims = [c for c in claims if len(c) >= 10]
-        claims.sort(key=len, reverse=True)
-        result = claims[:max_claims]
-
-        logger.info(f"Extracted {len(result)} claims via heuristic (sync)")
-        return result
-
-    @staticmethod
     def determine_query_type(question: str) -> QueryType:
         """
         Determine the type of query for routing to appropriate retrievers.
@@ -324,7 +294,7 @@ class QueryPreprocessor:
         sentences = QueryPreprocessor._split_sentences(answer) if answer and len(answer.strip()) >= 10 else []
         factual = [s for s in sentences if QueryPreprocessor._is_factual_sentence(s)]
 
-        claims = QueryPreprocessor.extract_claims(answer)
+        claims = await QueryPreprocessor.extract_claims_async(answer)
         query_type = QueryPreprocessor.determine_query_type(question)
 
         preprocessing_time_ms = int((time.time() - start) * 1000)
@@ -338,3 +308,32 @@ class QueryPreprocessor:
             factual_sentences=len(factual),
             preprocessing_time_ms=preprocessing_time_ms,
         )
+
+    @staticmethod
+    def extract_claims(answer: str, max_claims: int = 3) -> list[str]:
+        """Synchronous compatibility wrapper for tests."""
+        import asyncio
+        try:
+            return asyncio.run(QueryPreprocessor.extract_claims_async(answer, max_claims))
+        except RuntimeError:
+            from concurrent.futures import ThreadPoolExecutor
+            with ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(
+                    lambda: asyncio.run(QueryPreprocessor.extract_claims_async(answer, max_claims))
+                )
+                return future.result()
+
+    @staticmethod
+    def preprocess(question: str, answer: str) -> ProcessedQuery:
+        """Synchronous compatibility wrapper for tests."""
+        import asyncio
+        try:
+            return asyncio.run(QueryPreprocessor.preprocess_async(question, answer))
+        except RuntimeError:
+            from concurrent.futures import ThreadPoolExecutor
+            with ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(
+                    lambda: asyncio.run(QueryPreprocessor.preprocess_async(question, answer))
+                )
+                return future.result()
+

@@ -4,7 +4,7 @@ Uses FastAPI TestClient with mocked downstream services.
 """
 
 import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch, MagicMock, AsyncMock
 from fastapi.testclient import TestClient
 from app.models.response import JudgeResponse
 from app.services.preprocessing.query_preprocessor import ProcessedQuery
@@ -13,7 +13,7 @@ from main import app
 client = TestClient(app)
 
 
-# ── Fixtures ───────────────────────────────────────────────────────
+# ── Fixtures & Setup ────────────────────────────────────────────────
 
 VALID_PAYLOAD = {
     "question": "What is the capital of France?",
@@ -39,32 +39,58 @@ MOCK_JUDGE_RESPONSE = JudgeResponse(
 )
 
 
+@pytest.fixture(autouse=True)
+def mock_app_dependencies():
+    """
+    Autouse fixture that overrides auth dependencies, mocks cache calls, and
+    mocks app.state singletons (including MongoDB insert_one mock) so that functional
+    verification tests run cleanly and isolated.
+    """
+    # 1. Override JWT authentication dependency
+    from app.api.dependencies import get_current_user
+    app.dependency_overrides[get_current_user] = lambda: "test_user_123"
+
+    # 2. Mock state singletons
+    mock_sr = AsyncMock()
+    mock_judge = AsyncMock()
+    mock_agg = MagicMock()
+    
+    # Structure MongoDB mock to support async await insert_one in background tasks
+    mock_db = MagicMock()
+    mock_collection = AsyncMock()
+    mock_collection.insert_one = AsyncMock(return_value=MagicMock(inserted_id="mock_id"))
+    mock_db.__getitem__ = MagicMock(return_value=mock_collection)
+
+    app.state.source_router = mock_sr
+    app.state.judge = mock_judge
+    app.state.aggregator = mock_agg
+    app.state.db = mock_db
+
+    # 3. Patch cache functions to avoid cache pollution between tests
+    with patch("app.api.routes.verify.get_cached", new=AsyncMock(return_value=None)), \
+         patch("app.api.routes.verify.set_cached", new=AsyncMock()):
+        yield mock_sr, mock_judge, mock_agg, mock_db
+
+    # 4. Clean up dependency overrides
+    app.dependency_overrides.clear()
+
+
 # ── Success Path ───────────────────────────────────────────────────
 
 class TestVerifyEndpointSuccess:
     """Tests for the happy path of /api/verify."""
 
-    @patch("app.api.routes.verify.LLMJudge")
-    @patch("app.api.routes.verify.EvidenceAggregator")
-    @patch("app.api.routes.verify.SourceRouter")
     @patch("app.api.routes.verify.QueryPreprocessor")
     def test_full_pipeline_success(
-        self, mock_preprocessor, mock_router_cls, mock_aggregator_cls, mock_judge_cls
+        self, mock_preprocessor
     ):
-        # Setup mocks
-        mock_preprocessor.preprocess.return_value = MOCK_PROCESSED
+        # Setup preprocessor mock
+        mock_preprocessor.preprocess_async = AsyncMock(return_value=MOCK_PROCESSED)
 
-        mock_router = MagicMock()
-        mock_router.retrieve_evidence.return_value = MOCK_EVIDENCE_MAP
-        mock_router_cls.return_value = mock_router
-
-        mock_aggregator = MagicMock()
-        mock_aggregator.aggregate.return_value = "Paris is the capital and largest city of France."
-        mock_aggregator_cls.return_value = mock_aggregator
-
-        mock_judge = MagicMock()
-        mock_judge.judge.return_value = MOCK_JUDGE_RESPONSE
-        mock_judge_cls.return_value = mock_judge
+        # Setup state mocks
+        app.state.source_router.retrieve_evidence = AsyncMock(return_value=MOCK_EVIDENCE_MAP)
+        app.state.aggregator.aggregate.return_value = "Paris is the capital and largest city of France."
+        app.state.judge.judge = AsyncMock(return_value=MOCK_JUDGE_RESPONSE)
 
         response = client.post("/api/verify", json=VALID_PAYLOAD)
 
@@ -120,58 +146,35 @@ class TestVerifyEndpointValidation:
 class TestVerifyEndpointDegradation:
     """Tests for graceful degradation when services fail."""
 
-    @patch("app.api.routes.verify.LLMJudge")
-    @patch("app.api.routes.verify.EvidenceAggregator")
-    @patch("app.api.routes.verify.SourceRouter")
     @patch("app.api.routes.verify.QueryPreprocessor")
     def test_retrieval_failure_degrades_gracefully(
-        self, mock_preprocessor, mock_router_cls, mock_aggregator_cls, mock_judge_cls
+        self, mock_preprocessor
     ):
         """When retrieval fails, pipeline continues with empty evidence."""
-        mock_preprocessor.preprocess.return_value = MOCK_PROCESSED
+        mock_preprocessor.preprocess_async = AsyncMock(return_value=MOCK_PROCESSED)
 
-        mock_router = MagicMock()
-        mock_router.retrieve_evidence.side_effect = Exception("Wikipedia API down")
-        mock_router_cls.return_value = mock_router
-
-        # Aggregator should still be called (with empty list)
-        mock_aggregator = MagicMock()
-        mock_aggregator.aggregate.return_value = ""
-        mock_aggregator_cls.return_value = mock_aggregator
-
-        mock_judge = MagicMock()
-        mock_judge.judge.return_value = JudgeResponse(
+        app.state.source_router.retrieve_evidence = AsyncMock(side_effect=Exception("Wikipedia API down"))
+        app.state.aggregator.aggregate.return_value = ""
+        app.state.judge.judge = AsyncMock(return_value=JudgeResponse(
             score=50, verdict="unverifiable",
             explanation="No evidence available.", flag=False
-        )
-        mock_judge_cls.return_value = mock_judge
+        ))
 
         response = client.post("/api/verify", json=VALID_PAYLOAD)
         assert response.status_code == 200
         data = response.json()
         assert data["verdict"] == "uncertain"  # score 50 → uncertain
 
-    @patch("app.api.routes.verify.LLMJudge")
-    @patch("app.api.routes.verify.EvidenceAggregator")
-    @patch("app.api.routes.verify.SourceRouter")
     @patch("app.api.routes.verify.QueryPreprocessor")
     def test_judge_failure_returns_neutral(
-        self, mock_preprocessor, mock_router_cls, mock_aggregator_cls, mock_judge_cls
+        self, mock_preprocessor
     ):
         """When LLM judge fails, return neutral score."""
-        mock_preprocessor.preprocess.return_value = MOCK_PROCESSED
+        mock_preprocessor.preprocess_async = AsyncMock(return_value=MOCK_PROCESSED)
 
-        mock_router = MagicMock()
-        mock_router.retrieve_evidence.return_value = MOCK_EVIDENCE_MAP
-        mock_router_cls.return_value = mock_router
-
-        mock_aggregator = MagicMock()
-        mock_aggregator.aggregate.return_value = "Some evidence"
-        mock_aggregator_cls.return_value = mock_aggregator
-
-        mock_judge = MagicMock()
-        mock_judge.judge.side_effect = Exception("LLM API timeout")
-        mock_judge_cls.return_value = mock_judge
+        app.state.source_router.retrieve_evidence = AsyncMock(return_value=MOCK_EVIDENCE_MAP)
+        app.state.aggregator.aggregate.return_value = "Some evidence"
+        app.state.judge.judge = AsyncMock(side_effect=Exception("LLM API timeout"))
 
         response = client.post("/api/verify", json=VALID_PAYLOAD)
         assert response.status_code == 200
@@ -182,7 +185,7 @@ class TestVerifyEndpointDegradation:
     @patch("app.api.routes.verify.QueryPreprocessor")
     def test_preprocessing_failure_returns_500(self, mock_preprocessor):
         """When preprocessing fails, return 500 (can't continue without claims)."""
-        mock_preprocessor.preprocess.side_effect = Exception("NLP model failed")
+        mock_preprocessor.preprocess_async = AsyncMock(side_effect=Exception("NLP model failed"))
 
         response = client.post("/api/verify", json=VALID_PAYLOAD)
         assert response.status_code == 500
