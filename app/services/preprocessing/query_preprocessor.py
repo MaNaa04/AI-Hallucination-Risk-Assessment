@@ -12,7 +12,15 @@ from app.core.config import get_settings
 
 logger = get_logger(__name__)
 
-QueryType = Literal["encyclopedic", "recent_event", "numeric_statistical", "opinion_subjective"]
+QueryType = Literal[
+    "encyclopedic", 
+    "recent_event", 
+    "numeric_statistical", 
+    "opinion_subjective",
+    "medical_health",
+    "finance",
+    "programming"
+]
 
 
 @dataclass
@@ -50,6 +58,24 @@ OPINION_PATTERNS = [
     r"\bis it good\b", r"\bis it bad\b", r"\bwould you\b",
     r"\bwhat's your opinion\b", r"\bwhat is your opinion\b",
     r"\bcan you suggest\b", r"\bwhat are the pros\b",
+]
+
+MEDICAL_PATTERNS = [
+    r"\bcure\b", r"\btreatment\b", r"\bmedicine\b", r"\bmedical\b",
+    r"\bsymptom\b", r"\bdisease\b", r"\bdoctor\b", r"\btherapy\b",
+    r"\bhealth\b", r"\bcancer\b", r"\bvirus\b", r"\bpill\b", r"\bside effect\b"
+]
+
+FINANCE_PATTERNS = [
+    r"\bstock\b", r"\bprice of\b", r"\bmarket\b", r"\bshares\b",
+    r"\bfinance\b", r"\binvestment\b", r"\binterest rate\b",
+    r"\bdividend\b", r"\bwall street\b", r"\beconomy\b"
+]
+
+PROGRAMMING_PATTERNS = [
+    r"\bcode\b", r"\Bpython\b", r"\bjavascript\b", r"\bc\+\+\b", r"\bjava\b",
+    r"\bfunction\b", r"\bapi\b", r"\breact\b", r"\bnode\b", r"\bdatabase\b",
+    r"\bbackend\b", r"\bfrontend\b", r"\balgorithm\b", r"\bsql\b"
 ]
 
 # ── Patterns for filtering non-factual sentences ──────────────────
@@ -259,6 +285,24 @@ class QueryPreprocessor:
             if re.match(pattern, lower):
                 logger.info("Query type: opinion_subjective")
                 return "opinion_subjective"
+                
+        # Check for medical
+        for pattern in MEDICAL_PATTERNS:
+            if re.search(pattern, lower):
+                logger.info("Query type: medical_health")
+                return "medical_health"
+                
+        # Check for programming
+        for pattern in PROGRAMMING_PATTERNS:
+            if re.search(pattern, lower):
+                logger.info("Query type: programming")
+                return "programming"
+                
+        # Check for finance
+        for pattern in FINANCE_PATTERNS:
+            if re.search(pattern, lower):
+                logger.info("Query type: finance")
+                return "finance"
 
         # Check for numeric/statistical
         for pattern in NUMERIC_PATTERNS:

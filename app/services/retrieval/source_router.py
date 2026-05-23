@@ -16,6 +16,11 @@ from typing import Optional
 from app.core.logging import get_logger
 from app.services.retrieval.wikipedia_retriever import WikipediaRetriever
 from app.services.retrieval.serp_retriever import SerpAPIRetriever
+from app.services.retrieval.scholar_retriever import ScholarRetriever
+from app.services.retrieval.gov_retriever import GovRetriever
+from app.services.retrieval.news_retriever import NewsRetriever
+from app.services.retrieval.medical_retriever import MedicalRetriever
+from app.services.retrieval.finance_retriever import FinanceRetriever
 
 logger = get_logger(__name__)
 
@@ -40,16 +45,24 @@ class SourceRouter:
         """
         self.wikipedia = WikipediaRetriever(http_client=http_client)
         self.serpapi = SerpAPIRetriever(http_client=http_client)
+        self.scholar = ScholarRetriever(http_client=http_client)
+        self.gov = GovRetriever(http_client=http_client)
+        self.news = NewsRetriever(http_client=http_client)
+        self.medical = MedicalRetriever(http_client=http_client)
+        self.finance = FinanceRetriever(http_client=http_client)
 
     # ── Routing rules ────────────────────────────────────────────────────────
 
     def get_sources_for_query_type(self, query_type: str) -> list[str]:
         """Determine which sources to query based on the classified query type."""
         routing_rules = {
-            "encyclopedic": ["wikipedia", "serpapi"],
-            "recent_event": ["serpapi", "wikipedia"],
-            "numeric_statistical": ["wikipedia", "serpapi"],
+            "encyclopedic": ["wikipedia", "serpapi", "scholar", "gov"],
+            "recent_event": ["serpapi", "wikipedia", "gov", "scholar", "news"],
+            "numeric_statistical": ["wikipedia", "serpapi", "gov", "scholar", "finance"],
             "opinion_subjective": [],  # Skip retrieval entirely
+            "medical_health": ["medical", "scholar", "gov"],
+            "finance": ["finance", "news", "serpapi"],
+            "programming": ["serpapi", "wikipedia"]
         }
         return routing_rules.get(query_type, ["wikipedia"])
 
@@ -71,6 +84,21 @@ class SourceRouter:
             elif source == "serpapi":
                 evidence = await self.serpapi.get_evidence(claim)
                 return ("SerpAPI", evidence)
+            elif source == "scholar":
+                evidence = await self.scholar.get_evidence(claim)
+                return ("Scholar", evidence)
+            elif source == "gov":
+                evidence = await self.gov.get_evidence(claim)
+                return ("GovSource", evidence)
+            elif source == "news":
+                evidence = await self.news.get_evidence(claim)
+                return ("News", evidence)
+            elif source == "medical":
+                evidence = await self.medical.get_evidence(claim)
+                return ("Medical", evidence)
+            elif source == "finance":
+                evidence = await self.finance.get_evidence(claim)
+                return ("Finance", evidence)
             else:
                 return (source, None)
         except Exception as e:
