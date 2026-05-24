@@ -314,6 +314,15 @@ Configured via `.env` — **no code changes needed to switch providers**:
 | `groq` | `openai` (custom base URL) | `https://api.groq.com/openai/v1` |
 | `anthropic` | `anthropic` (native SDK) | Claude Sonnet/Haiku; uses `AsyncAnthropic` |
 
+> **⚠️ Tested & Verified (May 2026):**
+>
+> | Provider | Model | Status |
+> |----------|-------|--------|
+> | **Groq** | `llama-3.3-70b-versatile` | ✅ **Working** — Free, ~3s judge response, recommended for development |
+> | Gemini | `gemini-2.0-flash` | ⚠️ Free tier daily quota exhausts quickly |
+> | OpenAI | `gpt-4` / `gpt-4o-mini` | ⚠️ Requires paid billing — free keys return `insufficient_quota` |
+> | Groq | `llama3-70b-8192` | ❌ **Decommissioned** — use `llama-3.3-70b-versatile` instead |
+
 #### Judge Prompt (Evidence-Grounded)
 
 ```

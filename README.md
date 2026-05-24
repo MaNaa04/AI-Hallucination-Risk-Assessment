@@ -108,11 +108,28 @@ Edit `.env` and fill in your keys:
 |----------|----------|-------------|
 | `LLM_PROVIDER` | ✅ | `gemini`, `openai`, `groq`, `grok`, or `anthropic` |
 | `LLM_API_KEY` | ✅ | Your LLM API key |
-| `LLM_MODEL` | ✅ | Model name (e.g. `gemini-2.0-flash`) |
+| `LLM_MODEL` | ✅ | Model name (e.g. `llama-3.3-70b-versatile`) |
 | `SERPAPI_KEY` | ✅ | SerpAPI key for web search |
 | `WIKIPEDIA_API_ENABLED` | — | `true` (default) |
 | `MAX_CLAIMS_PER_REQUEST` | — | `3` (default) |
 | `MAX_EVIDENCE_TOKENS` | — | `2000` (default) |
+
+> **⚠️ Tested & Verified Configuration:**
+>
+> | Provider | Model | Status | Notes |
+> |----------|-------|--------|-------|
+> | **Groq** | `llama-3.3-70b-versatile` | ✅ **Tested & Working** | Free, fast (~3s judge), recommended |
+> | Gemini | `gemini-2.0-flash` | ⚠️ Free tier quota limits | Daily request limit exhausts quickly |
+> | OpenAI | `gpt-4` | ❌ Requires paid plan | Free API keys don't have access |
+> | OpenAI | `gpt-4o-mini` | ⚠️ Requires billing | Returns `insufficient_quota` without credits |
+> | Groq | `llama3-70b-8192` | ❌ Decommissioned | Use `llama-3.3-70b-versatile` instead |
+>
+> **Recommended `.env` for quick start:**
+> ```
+> LLM_PROVIDER=groq
+> LLM_API_KEY=<your-groq-key-from-console.groq.com>
+> LLM_MODEL=llama-3.3-70b-versatile
+> ```
 
 ### 3. Start the Backend
 

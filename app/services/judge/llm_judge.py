@@ -40,7 +40,7 @@ class LLMJudge:
             if settings.llm_provider == "groq":
                 base_url = "https://api.groq.com/openai/v1"
                 if not settings.llm_model:
-                    self.model = "llama3-70b-8192"
+                    self.model = "llama-3.3-70b-versatile"
             elif settings.llm_provider == "grok":
                 base_url = "https://api.x.ai/v1"
             elif settings.llm_provider == "gemini":
