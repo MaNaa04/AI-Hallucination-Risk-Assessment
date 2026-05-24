@@ -24,6 +24,7 @@ class LLMJudge:
         """Initialize judge with AsyncOpenAI client."""
         settings = get_settings()
         self.api_key = settings.llm_api_key
+        self.provider = settings.llm_provider
         
         # Use configured model from settings (accuracy trumps speed)
         self.model = settings.llm_model or "gpt-4o"
@@ -122,7 +123,7 @@ EVIDENCE: {evidence}"""
         return prompt
 
 
-    async def _call_openai(self, prompt: str) -> str:
+    async def _call_openai(self, prompt: str, max_tokens: int = 400) -> str:
         """Call async LLM API with accuracy-first settings."""
         # NOTE: response_format json_object is NOT used here because
         # Gemini's OpenAI-compat endpoint does not support it and will
@@ -135,15 +136,15 @@ EVIDENCE: {evidence}"""
                 {"role": "user", "content": prompt},
             ],
             temperature=0.0,
-            max_tokens=400,
+            max_tokens=max_tokens,
         )
         return response.choices[0].message.content
 
-    async def _call_anthropic(self, prompt: str) -> str:
+    async def _call_anthropic(self, prompt: str, max_tokens: int = 400) -> str:
         """Call Anthropic Claude API."""
         response = await self.anthropic_client.messages.create(
             model=self.model,
-            max_tokens=400,
+            max_tokens=max_tokens,
             messages=[
                 {"role": "user", "content": prompt},
             ],
@@ -325,10 +326,11 @@ CLAIMS TO EVALUATE:
 EVIDENCE: {evidence if evidence else 'No external evidence was retrieved.'}"""
 
         try:
+            # Per-claim responses are JSON arrays, need more tokens than single-claim
             if self.anthropic_client:
-                raw_response = await self._call_anthropic(prompt)
+                raw_response = await self._call_anthropic(prompt, max_tokens=800)
             else:
-                raw_response = await self._call_openai(prompt)
+                raw_response = await self._call_openai(prompt, max_tokens=800)
 
             logger.info(f"Per-claim raw response: {raw_response[:300]}")
 

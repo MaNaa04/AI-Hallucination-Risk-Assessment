@@ -135,6 +135,17 @@ class VerifyResponse(BaseModel):
             "so the Chrome Extension can highlight hallucinated sentences."
         )
     )
+    provider: Optional[str] = Field(
+        default=None,
+        description=(
+            "LLM provider used for judging (gemini, openai, groq, grok, anthropic). "
+            "Use this alongside cache_hit=false to benchmark specific providers."
+        )
+    )
+    model: Optional[str] = Field(
+        default=None,
+        description="Specific LLM model used (e.g. gemini-2.0-flash, claude-sonnet-4-20250514)"
+    )
     
     @staticmethod
     def from_judge_response(
@@ -145,6 +156,8 @@ class VerifyResponse(BaseModel):
         debug: Optional[dict] = None,
         cache_hit: bool = False,
         claim_results: Optional[list["ClaimResult"]] = None,
+        provider: Optional[str] = None,
+        model: Optional[str] = None,
     ) -> "VerifyResponse":
         """
         Convert LLM Judge response to user-facing response.
@@ -180,6 +193,8 @@ class VerifyResponse(BaseModel):
             cache_hit=cache_hit,
             debug=debug,
             claim_results=claim_results,
+            provider=provider,
+            model=model,
         )
     
     class Config:
@@ -193,6 +208,8 @@ class VerifyResponse(BaseModel):
                 "request_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
                 "processing_time_ms": 1250,
                 "cache_hit": False,
+                "provider": "gemini",
+                "model": "gemini-2.0-flash",
                 "claim_results": [
                     {
                         "claim_text": "Paris is the capital of France",

@@ -137,9 +137,24 @@ async def verify(request: VerifyRequest) -> VerifyResponse:
         "claims_extracted": processed.extracted_claims,
         "evidence_found": bool(aggregated_evidence),
         "evidence_snippets": evidence_map,
-        "query_type": processed.query_type
+        "query_type": processed.query_type,
+        "timing": {
+            "preprocessing_ms": preprocessing_ms,
+            "retrieval_ms": retrieval_ms,
+            "judge_ms": judge_ms,
+            "total_ms": processing_time_ms,
+        },
     }
     
+    # Extract provider/model info for benchmarking
+    judge_provider = getattr(judge, 'provider', None)
+    judge_model = getattr(judge, 'model', None)
+    # Ensure these are strings (getattr on MagicMock returns mock objects)
+    if judge_provider and not isinstance(judge_provider, str):
+        judge_provider = None
+    if judge_model and not isinstance(judge_model, str):
+        judge_model = None
+
     final_response = VerifyResponse.from_judge_response(
         judge_resp=judge_response,
         sources=sources,
@@ -147,6 +162,8 @@ async def verify(request: VerifyRequest) -> VerifyResponse:
         processing_time_ms=processing_time_ms,
         debug=debug_info,
         claim_results=claim_results,
+        provider=judge_provider,
+        model=judge_model,
     )
     
     # ── Analytics Tracking ─────────────────────────────────────────
