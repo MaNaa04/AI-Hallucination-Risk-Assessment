@@ -4,6 +4,13 @@
  * Displays results in a right-side panel (like Gemini)
  */
 
+// Sanitize untrusted LLM output before inserting into innerHTML
+function escapeHTML(str) {
+  const div = document.createElement("div");
+  div.textContent = str;
+  return div.innerHTML;
+}
+
 const API_URL = "http://localhost:8000/api/verify";
 let isInjecting = false;
 
@@ -709,8 +716,8 @@ function showResultInPanel(data) {
             <span class="hd-claim-verdict">${claimVerdict}</span>
             <div class="hd-claim-score ${claimScoreClass}">${claim.score}</div>
           </div>
-          <div class="hd-claim-text">"${claim.claim_text}"</div>
-          <div class="hd-claim-explanation">${claim.explanation}</div>
+          <div class="hd-claim-text">"${escapeHTML(claim.claim_text)}"</div>
+          <div class="hd-claim-explanation">${escapeHTML(claim.explanation)}</div>
         </div>
       `;
     });

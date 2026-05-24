@@ -1,5 +1,12 @@
 const API_URL = "http://localhost:8000/api/verify";
 
+// Sanitize untrusted LLM output before inserting into innerHTML
+function escapeHTML(str) {
+  const div = document.createElement("div");
+  div.textContent = str;
+  return div.innerHTML;
+}
+
 document.addEventListener("DOMContentLoaded", () => {
   const textArea = document.getElementById("ai-text");
   const verifyBtn = document.getElementById("verify-btn");
@@ -150,8 +157,8 @@ document.addEventListener("DOMContentLoaded", () => {
               <span class="claim-verdict">${verdictLabel}</span>
               <div class="claim-score ${scoreClass}">${claim.score}</div>
             </div>
-            <div class="claim-text">"${claim.claim_text}"</div>
-            <div class="claim-explanation">${claim.explanation}</div>
+            <div class="claim-text">"${escapeHTML(claim.claim_text)}"</div>
+            <div class="claim-explanation">${escapeHTML(claim.explanation)}</div>
           </div>
         `;
       });

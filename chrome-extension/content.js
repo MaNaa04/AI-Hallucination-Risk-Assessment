@@ -6,6 +6,13 @@
  *  - Inline result overlay display
  */
 
+// Sanitize untrusted LLM output before inserting into innerHTML
+function escapeHTML(str) {
+  const div = document.createElement("div");
+  div.textContent = str;
+  return div.innerHTML;
+}
+
 const HD_API_URL = "http://localhost:8000/api/verify";
 
 // Listen for messages from background script or popup
@@ -490,8 +497,8 @@ function showResultOverlay(result) {
             <span class="hdo-claim-verdict">${claimVerdict}</span>
             <div class="hdo-claim-score ${claimScoreClass}">${claim.score}</div>
           </div>
-          <div class="hdo-claim-text">"${claim.claim_text}"</div>
-          <div class="hdo-claim-explanation">${claim.explanation}</div>
+          <div class="hdo-claim-text">"${escapeHTML(claim.claim_text)}"</div>
+          <div class="hdo-claim-explanation">${escapeHTML(claim.explanation)}</div>
         </div>
       `;
     });
