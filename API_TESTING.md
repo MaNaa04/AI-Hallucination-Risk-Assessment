@@ -17,7 +17,7 @@ This file documents API endpoints for testing with Postman or curl.
 
 **Name**: Health Check  
 **Method**: GET  
-**URL**: `{{base_url}}/health`  
+**URL**: `{{api_base}}/health`  
 
 ### Response
 ```json
@@ -74,7 +74,10 @@ Content-Type: application/json
   "verdict": "accurate",
   "explanation": "Verified against Wikipedia. Paris is indeed the capital of France.",
   "flag": false,
-  "sources_used": ["Wikipedia"]
+  "sources_used": ["Wikipedia"],
+  "cache_hit": false,
+  "provider": "gemini",
+  "model": "gemini-2.0-flash"
 }
 ```
 
@@ -95,7 +98,10 @@ Content-Type: application/json
   "verdict": "hallucination",
   "explanation": "Vincent Van Gogh was a 19th-century artist who died in 1890. This is factually incorrect.",
   "flag": true,
-  "sources_used": ["Wikipedia"]
+  "sources_used": ["Wikipedia"],
+  "cache_hit": false,
+  "provider": "gemini",
+  "model": "gemini-2.0-flash"
 }
 ```
 
@@ -233,7 +239,7 @@ curl -X POST "http://localhost:8000/api/verify" \
 
 ### Test 3: Health Check
 ```bash
-curl http://localhost:8000/health
+curl http://localhost:8000/api/health
 ```
 
 ### Test 4: Pretty Print Response
@@ -288,10 +294,10 @@ curl -X POST "http://localhost:8000/api/verify" \
 
 - **Health Check**: <10ms
 - **Simple Verify**: 2-8 seconds (typical)
-  - 1s: Wikipedia search
-  - 2s: Evidence aggregation
-  - 5s: LLM judge call
-  - 1s: Response formatting
+  - 1ms: Preprocessing (claim extraction)
+  - 1-3s: Wikipedia/SerpAPI retrieval
+  - 1-5s: LLM judge call
+  - Per-layer timing is included in `debug.timing` in the response
 
 ---
 
