@@ -4,7 +4,7 @@
  * Displays results in a right-side panel (like Gemini)
  */
 
-const API_URL = "http://localhost:8000/api/verify";
+const API_URL = "http://127.0.0.1:8000/api/verify";
 let isInjecting = false;
 
 // Create and manage right-side panel
@@ -539,7 +539,10 @@ async function verifyText(text, button) {
   try {
     const response = await fetch(API_URL, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJwb3N0bWFuX3Rlc3RfdXNlcl85OTkiLCJleHAiOjE3Nzk1MjA0OTd9.2ZFYO-YBna5uwOV2m7hxv3jP6U9ywl3ut0KRE4vxjKs"
+      },
       body: JSON.stringify({
         question: "Is this statement factually accurate?",
         answer: text,

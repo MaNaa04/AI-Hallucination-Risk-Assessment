@@ -60,6 +60,7 @@ async def lifespan(app: FastAPI):
     from app.services.retrieval.source_router import SourceRouter
     from app.services.judge.llm_judge import LLMJudge
     from app.services.retrieval.evidence_aggregator import EvidenceAggregator
+    from app.services.judge.grok_mediator import GrokMediator
 
     app.state.http_client = create_http_client()
     logger.info("Shared httpx.AsyncClient created (connection pooling enabled)")
@@ -73,6 +74,9 @@ async def lifespan(app: FastAPI):
 
     app.state.aggregator = EvidenceAggregator()
     logger.info("EvidenceAggregator singleton initialised")
+
+    app.state.mediator = GrokMediator()
+    logger.info("GrokMediator singleton initialised")
 
     # ── JWT Verifier (stateless; instantiated once, shared per request) ────────
     # Tokens are minted client-side (Chrome Extension → Supabase/Firebase).

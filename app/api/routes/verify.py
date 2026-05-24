@@ -219,11 +219,25 @@ async def verify(
 
     # ── Layer 3 — Evidence Aggregation ───────────────────────────────────────
     aggregated_evidence = ""
+    source_confidence = 1.0
     try:
         evidence_list = list(evidence_map.values()) if evidence_map else []
         aggregated_evidence = aggregator.aggregate(evidence_list)
+        
+        # ── Layer 3b — Consensus Check ───────────────────────────────────────
+        # Only run mediator when multiple sources returned evidence
+        if len(evidence_map) > 1:
+            mediator = request.app.state.mediator
+            consensus_result = await mediator.check_consensus(
+                claims=processed.extracted_claims,
+                evidence_map=evidence_map,
+            )
+            # Use adjusted evidence that contains mediator conflict info
+            aggregated_evidence = consensus_result.adjusted_evidence
+            source_confidence = consensus_result.confidence
+            
     except Exception as e:
-        logger.warning(f"[{request_id}] Aggregation failed: {e}")
+        logger.warning(f"[{request_id}] Aggregation/Mediation failed: {e}")
         aggregated_evidence = ""
 
     # ── Layer 4 — LLM Judge ──────────────────────────────────────────────────
@@ -288,6 +302,12 @@ async def verify(
             cache_ttl = 60
         else:
             cache_ttl = _QUERY_TYPE_TTL.get(processed.query_type, _DEFAULT_VERIFY_TTL)
+
+        # Skip full-TTL cache for very low-confidence consensus results
+        min_score_to_cache = 0.5  # scores below this = too uncertain to freeze for days
+        if not _judge_failed and source_confidence < min_score_to_cache:
+            cache_ttl = 3600  # Still cache but with a short TTL so it retries soon
+            logger.info(f"[{request_id}] Low source confidence ({source_confidence:.2f}), limiting cache TTL to 3600s")
 
         await set_cached(verify_cache_key, final_response.model_dump(), ttl=cache_ttl)
 

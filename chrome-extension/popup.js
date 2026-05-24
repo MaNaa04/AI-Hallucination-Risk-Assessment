@@ -63,7 +63,10 @@ document.addEventListener("DOMContentLoaded", () => {
     try {
       const res = await fetch(API_URL, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJwb3N0bWFuX3Rlc3RfdXNlcl85OTkiLCJleHAiOjE3Nzk1MTk4NjV9.YkfVG7GUW8aE1DDM-fdlkcBfU-TIpi2cQ3_dyAo93Qc"
+        },
         body: JSON.stringify({
           question: "General Context",
           answer: text,

@@ -1,4 +1,5 @@
 [
+  [
   {
     "request_id": "a0a97029-5c3e-4373-9e53-20223b70b10c",
     "timestamp": "2026-03-28T03:31:37.637683+00:00",
@@ -1985,5 +1986,30 @@
     "preprocessing_time_ms": 0,
     "retrieval_time_ms": 0,
     "judge_time_ms": 0
+  },
+   {
+    "request_id": "1caa5ff0-2c13-4b0b-8a3b-f0f5e1824e99",
+    "timestamp": "2026-05-23T06:43:12.993421+00:00",
+    "question_preview": "What is the official inflation rate for the United States economy right now?",
+    "answer_preview": "According to blog sources, the US inflation rate is completely unstable ranging between 12% and 15%, but the White House",
+    "score": 23,
+    "verdict": "hallucination",
+    "sources_used": [
+      "Finance",
+      "News",
+      "SerpAPI"
+    ],
+    "processing_time_ms": 12834,
+    "claims_count": 3,
+    "evidence_chars": 7191,
+    "provider": "",
+    "query_type": "finance",
+    "sentences_found": 2,
+    "factual_sentences": 2,
+    "preprocessing_time_ms": 4807,
+    "retrieval_time_ms": 6701,
+    "judge_time_ms": 1317
   }
+]
+ 
 ]
