@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException
 from app.core.logging import get_logger
 from app.models.request import VerifyRequest
-from app.models.response import VerifyResponse, JudgeResponse
+from app.models.response import VerifyResponse, JudgeResponse, ClaimResult
 from app.services.preprocessing.query_preprocessor import QueryPreprocessor
 from app.services.retrieval.source_router import SourceRouter
 from app.services.retrieval.evidence_aggregator import EvidenceAggregator
@@ -107,6 +107,28 @@ async def verify(request: VerifyRequest) -> VerifyResponse:
             flag=False
         )
     
+    # ── Layer 4b — Per-Claim Fine-Grained Scoring ─────────────────────────────
+    claim_results = None
+    try:
+        if processed.extracted_claims:
+            raw_claim_results = await judge.judge_per_claim(
+                request.question,
+                request.answer,
+                aggregated_evidence,
+                processed.extracted_claims,
+            )
+            if raw_claim_results:
+                claim_results = [
+                    ClaimResult(**cr) for cr in raw_claim_results
+                ]
+                logger.info(
+                    f"[{request_id}] Per-claim scoring complete | "
+                    f"claims_scored={len(claim_results)}"
+                )
+    except Exception as e:
+        logger.warning(f"[{request_id}] Per-claim scoring failed (non-fatal): {e}")
+        claim_results = None
+
     # ── Layer 5 — Response Building ────────────────────────────────
     processing_time_ms = int((time.perf_counter() - pipeline_start) * 1000)
     sources = list(evidence_map.keys()) if evidence_map else None
@@ -123,7 +145,8 @@ async def verify(request: VerifyRequest) -> VerifyResponse:
         sources=sources,
         request_id=request_id,
         processing_time_ms=processing_time_ms,
-        debug=debug_info
+        debug=debug_info,
+        claim_results=claim_results,
     )
     
     # ── Analytics Tracking ─────────────────────────────────────────

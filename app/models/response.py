@@ -7,6 +7,45 @@ from pydantic import BaseModel, Field
 from typing import Optional, Literal
 
 
+class ClaimResult(BaseModel):
+    """Per-claim verification result for fine-grained scoring.
+    
+    Each extracted claim gets its own score, verdict, and text-position
+    mapping so the Chrome Extension can highlight exactly which sentence
+    in the AI answer is a hallucination.
+    """
+    claim_text: str = Field(
+        ...,
+        description="The extracted claim text that was verified"
+    )
+    score: int = Field(
+        ...,
+        ge=0,
+        le=100,
+        description="Per-claim hallucination risk score (0-100)"
+    )
+    verdict: Literal["accurate", "uncertain", "hallucination"] = Field(
+        ...,
+        description="Per-claim verdict"
+    )
+    explanation: str = Field(
+        ...,
+        description="Why this specific claim received this score"
+    )
+    source_text: str = Field(
+        default="",
+        description="Original sentence from the answer this claim maps to"
+    )
+    start_index: int = Field(
+        default=-1,
+        description="Character start offset in the original answer (-1 if unmapped)"
+    )
+    end_index: int = Field(
+        default=-1,
+        description="Character end offset in the original answer (-1 if unmapped)"
+    )
+
+
 class JudgeResponse(BaseModel):
     """
     Judgment output from the LLM Judge.
@@ -76,9 +115,25 @@ class VerifyResponse(BaseModel):
         default=None,
         description="Total pipeline processing time in milliseconds"
     )
+    cache_hit: bool = Field(
+        default=False,
+        description=(
+            "True if this result was served from the Redis cache (no LLM call was made). "
+            "False if the full pipeline ran and a fresh LLM judgment was produced. "
+            "Use this field to filter out cached results when benchmarking LLM quality."
+        )
+    )
     debug: Optional[dict] = Field(
         default=None,
         description="Debug info detailing exactly what evidence snippets were retrieved"
+    )
+    claim_results: Optional[list[ClaimResult]] = Field(
+        default=None,
+        description=(
+            "Per-claim fine-grained scoring results. Each claim gets its own "
+            "score, verdict, and character-offset mapping to the original answer "
+            "so the Chrome Extension can highlight hallucinated sentences."
+        )
     )
     
     @staticmethod
@@ -88,6 +143,8 @@ class VerifyResponse(BaseModel):
         request_id: Optional[str] = None,
         processing_time_ms: Optional[int] = None,
         debug: Optional[dict] = None,
+        cache_hit: bool = False,
+        claim_results: Optional[list["ClaimResult"]] = None,
     ) -> "VerifyResponse":
         """
         Convert LLM Judge response to user-facing response.
@@ -98,6 +155,7 @@ class VerifyResponse(BaseModel):
             request_id: Unique request ID for tracing
             processing_time_ms: Pipeline processing time
             debug: Detailed evidence snippets retrieved
+            claim_results: Per-claim fine-grained scoring results
             
         Returns:
             Formatted response with user-friendly verdict
@@ -119,7 +177,9 @@ class VerifyResponse(BaseModel):
             sources_used=sources,
             request_id=request_id,
             processing_time_ms=processing_time_ms,
+            cache_hit=cache_hit,
             debug=debug,
+            claim_results=claim_results,
         )
     
     class Config:
@@ -131,6 +191,18 @@ class VerifyResponse(BaseModel):
                 "flag": False,
                 "sources_used": ["Wikipedia"],
                 "request_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
-                "processing_time_ms": 1250
+                "processing_time_ms": 1250,
+                "cache_hit": False,
+                "claim_results": [
+                    {
+                        "claim_text": "Paris is the capital of France",
+                        "score": 95,
+                        "verdict": "accurate",
+                        "explanation": "Confirmed by multiple sources.",
+                        "source_text": "Paris is indeed the capital of France.",
+                        "start_index": 0,
+                        "end_index": 39,
+                    }
+                ],
             }
         }

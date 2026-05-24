@@ -288,6 +288,87 @@ function injectOverlayStyles() {
       color: #c53030;
       line-height: 1.5;
     }
+
+    /* Per-claim cards */
+    #hd-overlay .hdo-claims-title {
+      font-size: 10px;
+      font-weight: 600;
+      color: #adb5bd;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin: 10px 0 6px;
+      padding-top: 10px;
+      border-top: 1px solid #f0f0f0;
+    }
+
+    #hd-overlay .hdo-claim-card {
+      padding: 8px 10px;
+      margin-bottom: 4px;
+      border-radius: 6px;
+      border-left: 3px solid;
+      background: #f8f9fa;
+    }
+
+    #hd-overlay .hdo-claim-card.accurate {
+      border-left-color: #0d7a3e;
+      background: #f0faf4;
+    }
+
+    #hd-overlay .hdo-claim-card.uncertain {
+      border-left-color: #d4a017;
+      background: #fefdf5;
+    }
+
+    #hd-overlay .hdo-claim-card.hallucination {
+      border-left-color: #c53030;
+      background: #fff5f5;
+    }
+
+    #hd-overlay .hdo-claim-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 3px;
+    }
+
+    #hd-overlay .hdo-claim-verdict {
+      font-size: 11px;
+      font-weight: 600;
+    }
+
+    #hd-overlay .hdo-claim-card.accurate .hdo-claim-verdict { color: #0d7a3e; }
+    #hd-overlay .hdo-claim-card.uncertain .hdo-claim-verdict { color: #b8860b; }
+    #hd-overlay .hdo-claim-card.hallucination .hdo-claim-verdict { color: #c53030; }
+
+    #hd-overlay .hdo-claim-score {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      font-weight: 700;
+      color: white;
+      flex-shrink: 0;
+    }
+
+    #hd-overlay .hdo-claim-score.high { background: linear-gradient(135deg, #0d7a3e, #28a745); }
+    #hd-overlay .hdo-claim-score.mid { background: linear-gradient(135deg, #d4a017, #f0c040); color: #5a4800; }
+    #hd-overlay .hdo-claim-score.low { background: linear-gradient(135deg, #c53030, #e53e3e); }
+
+    #hd-overlay .hdo-claim-text {
+      font-size: 11px;
+      color: #495057;
+      line-height: 1.4;
+      font-style: italic;
+    }
+
+    #hd-overlay .hdo-claim-explanation {
+      font-size: 10px;
+      color: #6c757d;
+      line-height: 1.3;
+    }
   `;
   document.head.appendChild(style);
 }
@@ -366,7 +447,7 @@ function showErrorOverlay(message) {
  * Show the verification result
  */
 function showResultOverlay(result) {
-  const { score, verdict, explanation, sources_used } = result;
+  const { score, verdict, explanation, sources_used, claim_results } = result;
 
   const overlay = createOverlayShell();
 
@@ -391,6 +472,31 @@ function showResultOverlay(result) {
     ? sources_used.map(s => `<span class="hdo-tag">${s}</span>`).join("")
     : '<span class="hdo-tag">None</span>';
 
+  // Per-claim cards
+  let claimsHTML = "";
+  if (claim_results && claim_results.length > 0) {
+    const verdictLabels = {
+      accurate: "✅ Accurate",
+      uncertain: "⚠️ Uncertain",
+      hallucination: "🚩 Hallucination",
+    };
+    claimsHTML = '<div class="hdo-claims-title">Per-Claim Breakdown</div>';
+    claim_results.forEach((claim) => {
+      const claimScoreClass = claim.score >= 70 ? "high" : claim.score >= 40 ? "mid" : "low";
+      const claimVerdict = verdictLabels[claim.verdict] || "❓ Unknown";
+      claimsHTML += `
+        <div class="hdo-claim-card ${claim.verdict}">
+          <div class="hdo-claim-header">
+            <span class="hdo-claim-verdict">${claimVerdict}</span>
+            <div class="hdo-claim-score ${claimScoreClass}">${claim.score}</div>
+          </div>
+          <div class="hdo-claim-text">"${claim.claim_text}"</div>
+          <div class="hdo-claim-explanation">${claim.explanation}</div>
+        </div>
+      `;
+    });
+  }
+
   overlay.querySelector(".hdo-body").innerHTML = `
     <div class="hdo-verdict-row">
       <span class="hdo-verdict ${v.cls}">${v.text}</span>
@@ -401,6 +507,7 @@ function showResultOverlay(result) {
       <div class="hdo-sources-label">Sources</div>
       <div class="hdo-source-tags">${sourceTags}</div>
     </div>
+    ${claimsHTML}
   `;
 
   autoClose(overlay, 20000);

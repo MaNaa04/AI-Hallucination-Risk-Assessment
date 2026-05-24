@@ -28,6 +28,7 @@ class LLMJudge:
         # Use configured model from settings (accuracy trumps speed)
         self.model = settings.llm_model or "gpt-4o"
         self.client = None
+        self.anthropic_client = None
 
         if not self.api_key or self.api_key in ("your_llm_api_key_here", ""):
             logger.warning("LLM API key not configured")
@@ -45,6 +46,18 @@ class LLMJudge:
                 base_url = "https://generativelanguage.googleapis.com/v1beta/openai/"
                 if not settings.llm_model:
                     self.model = "gemini-2.0-flash"
+            elif settings.llm_provider == "anthropic":
+                # Claude uses its native SDK, not the OpenAI-compatible endpoint
+                try:
+                    from anthropic import AsyncAnthropic
+                    self.anthropic_client = AsyncAnthropic(api_key=self.api_key)
+                    if not settings.llm_model:
+                        self.model = "claude-sonnet-4-20250514"
+                    logger.info(f"Initialized Anthropic client with model: {self.model} (provider: anthropic)")
+                    return  # Skip OpenAI client creation
+                except ImportError:
+                    logger.error("anthropic package not installed. Run: pip install anthropic")
+                    return
                 
             self.client = AsyncOpenAI(api_key=self.api_key, base_url=base_url)
             logger.info(f"Initialized Async Judge with model: {self.model} (provider: {settings.llm_provider})")
@@ -126,6 +139,19 @@ EVIDENCE: {evidence}"""
         )
         return response.choices[0].message.content
 
+    async def _call_anthropic(self, prompt: str) -> str:
+        """Call Anthropic Claude API."""
+        response = await self.anthropic_client.messages.create(
+            model=self.model,
+            max_tokens=400,
+            messages=[
+                {"role": "user", "content": prompt},
+            ],
+            system="You are a fact-checking JSON agent. Always return valid JSON with keys: score, verdict, explanation.",
+            temperature=0.0,
+        )
+        return response.content[0].text
+
     def _parse_judge_response(self, raw_text: str) -> JudgeResponse:
         """Parse LLM response text into JudgeResponse."""
         try:
@@ -193,12 +219,15 @@ EVIDENCE: {evidence}"""
         if early_exit:
             return early_exit
 
-        if not self.client:
+        if not self.client and not self.anthropic_client:
             return self._heuristic_judge(question, answer, evidence)
 
         prompt = self.build_judge_prompt(question, answer, evidence)
         try:
-            raw_response = await self._call_openai(prompt)
+            if self.anthropic_client:
+                raw_response = await self._call_anthropic(prompt)
+            else:
+                raw_response = await self._call_openai(prompt)
             logger.info(f"LLM raw response: {raw_response[:300]}")
             return self._parse_judge_response(raw_response)
         except Exception as e:
@@ -210,7 +239,7 @@ EVIDENCE: {evidence}"""
         """
         Extract Atomic Knowledge Triplets asynchronously using optimized prompt.
         """
-        if not self.client:
+        if not self.client and not self.anthropic_client:
             return []
 
         prompt = f"""Extract verifiable "Atomic Knowledge Triplets" from this text.
@@ -220,13 +249,16 @@ Text: "{answer}"
 """
         logger.info(f"Extracting triplets via {self.model}")
         try:
-            response = await self.client.chat.completions.create(
-                model=self.model,
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0.0,
-                max_tokens=250
-            )
-            raw_response = response.choices[0].message.content
+            if self.anthropic_client:
+                raw_response = await self._call_anthropic(prompt)
+            else:
+                response = await self.client.chat.completions.create(
+                    model=self.model,
+                    messages=[{"role": "user", "content": prompt}],
+                    temperature=0.0,
+                    max_tokens=250
+                )
+                raw_response = response.choices[0].message.content
             
             # Simple list parser
             json_match = re.search(r'\[.*\]', raw_response, re.DOTALL)
@@ -237,4 +269,137 @@ Text: "{answer}"
             return []
         except Exception as e:
             logger.error(f"Async Triplet extraction failed: {e}")
+            return []
+
+    async def judge_per_claim(
+        self,
+        question: str,
+        answer: str,
+        evidence: str,
+        claims: list[str],
+    ) -> list[dict]:
+        """
+        Evaluate each claim individually for fine-grained per-claim scoring.
+
+        Sends a single LLM call that evaluates all claims at once and returns
+        a per-claim breakdown with scores, verdicts, and text-position mapping.
+
+        Args:
+            question: Original question asked to the AI.
+            answer:   Full AI-generated answer text.
+            evidence: Aggregated evidence string from retrieval layer.
+            claims:   List of extracted claim strings to evaluate.
+
+        Returns:
+            List of dicts, one per claim, with keys: claim_text, score,
+            verdict, explanation, source_text, start_index, end_index.
+            Returns empty list on any failure (non-breaking).
+        """
+        if (not self.client and not self.anthropic_client) or not claims:
+            return []
+
+        claims_text = "\n".join([f"{i+1}. {c}" for i, c in enumerate(claims)])
+
+        prompt = f"""You are a strict factual fact-verification judge.
+Evaluate EACH claim individually against the evidence.
+Return a JSON array with one object per claim:
+[
+  {{
+    "claim_index": <0-based index>,
+    "claim_text": "<the claim>",
+    "score": <integer 0-100>,
+    "verdict": "<verified, likely_hallucination, or unverifiable>",
+    "explanation": "<1 sentence explaining your reasoning for THIS specific claim>"
+  }}
+]
+
+SCORING: Same rules as single-claim scoring.
+- 70-100 = "verified" (factually correct)
+- 40-69 = "unverifiable" (ambiguous or unknown)
+- 0-39 = "likely_hallucination" (factually wrong)
+
+QUESTION: {question}
+FULL ANSWER: {answer}
+CLAIMS TO EVALUATE:
+{claims_text}
+EVIDENCE: {evidence if evidence else 'No external evidence was retrieved.'}"""
+
+        try:
+            if self.anthropic_client:
+                raw_response = await self._call_anthropic(prompt)
+            else:
+                raw_response = await self._call_openai(prompt)
+
+            logger.info(f"Per-claim raw response: {raw_response[:300]}")
+
+            # Parse JSON array from response
+            cleaned = re.sub(
+                r'^```(?:json)?\s*|\s*```$', '', raw_response.strip(),
+                flags=re.MULTILINE,
+            ).strip()
+            try:
+                results = json.loads(cleaned)
+            except json.JSONDecodeError:
+                json_match = re.search(r'\[.*\]', cleaned, re.DOTALL)
+                if not json_match:
+                    logger.error("No JSON array found in per-claim response")
+                    return []
+                results = json.loads(json_match.group(0))
+
+            if not isinstance(results, list):
+                return []
+
+            # Map results back to answer text positions
+            per_claim_results = []
+            for item in results:
+                score = max(0, min(100, int(item.get("score", 50))))
+
+                # Map judge verdict to user-facing verdict
+                if score >= 70:
+                    verdict = "accurate"
+                elif score >= 40:
+                    verdict = "uncertain"
+                else:
+                    verdict = "hallucination"
+
+                claim_text = item.get("claim_text", "")
+
+                # Find the claim's position in the original answer
+                start_idx = -1
+                end_idx = -1
+                source_text = ""
+
+                if claim_text:
+                    # Try to find the source sentence containing this claim
+                    for sentence in re.split(r'(?<=[.!?])\s+', answer):
+                        if claim_text.lower()[:30] in sentence.lower():
+                            source_text = sentence.strip()
+                            sent_start = answer.find(sentence)
+                            if sent_start >= 0:
+                                start_idx = sent_start
+                                end_idx = sent_start + len(sentence)
+                            break
+
+                    # Fallback: direct substring match
+                    if start_idx < 0:
+                        direct = answer.lower().find(claim_text.lower()[:50])
+                        if direct >= 0:
+                            start_idx = direct
+                            end_idx = direct + len(claim_text)
+
+                per_claim_results.append({
+                    "claim_text": claim_text,
+                    "score": score,
+                    "verdict": verdict,
+                    "explanation": item.get("explanation", "No explanation provided."),
+                    "source_text": source_text,
+                    "start_index": start_idx,
+                    "end_index": end_idx,
+                })
+
+            logger.info(f"Per-claim judging complete: {len(per_claim_results)} claims scored")
+            return per_claim_results
+
+        except Exception as e:
+            logger.error(f"Per-claim judging failed: {e}", exc_info=True)
             return []
