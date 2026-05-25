@@ -82,3 +82,33 @@ async def get_current_user(
 
     logger.debug(f"Authenticated request — user_id={user_id!r}")
     return user_id
+
+
+async def get_optional_user(
+    request: Request,
+) -> str | None:
+    """
+    FastAPI dependency — extract the user ID if a valid JWT bearer token is present.
+    Does not raise 401/403 exceptions if the token is missing, expired, or invalid;
+    simply returns None.
+    """
+    auth_header = request.headers.get("Authorization")
+    if not auth_header:
+        return None
+
+    parts = auth_header.split()
+    if len(parts) != 2 or parts[0].lower() != "bearer":
+        return None
+
+    token = parts[1]
+    verifier = getattr(request.app.state, "auth_verifier", None)
+    if verifier is None:
+        return None
+
+    try:
+        user_id = verifier.extract_user_id(token)
+        return user_id
+    except Exception as exc:
+        logger.debug(f"Optional token verification failed: {exc}")
+        return None
+

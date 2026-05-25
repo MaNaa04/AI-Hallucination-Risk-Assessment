@@ -373,29 +373,41 @@ async def verify(
         logger.warning(f"[{request_id}] Cache store failed (non-fatal): {e}")
 
     # ── Analytics Tracking ───────────────────────────────────────────────────
-    try:
-        tracker = AnalyticsTracker()
-        tracker.record(VerificationEvent(
-            request_id=request_id,
-            timestamp=datetime.now(timezone.utc).isoformat(),
-            question_preview=body.question[:80],
-            answer_preview=body.answer[:120],
-            score=final_response.score,
-            verdict=final_response.verdict,
-            sources_used=sources or [],
-            processing_time_ms=processing_time_ms,
-            claims_count=len(processed.extracted_claims),
-            evidence_chars=len(aggregated_evidence),
-            provider=getattr(judge, "provider", ""),
-            query_type=processed.query_type,
-            sentences_found=processed.sentences_found,
-            factual_sentences=processed.factual_sentences,
-            preprocessing_time_ms=preprocessing_ms,
-            retrieval_time_ms=retrieval_ms,
-            judge_time_ms=judge_ms,
-        ))
-    except Exception as e:
-        logger.warning(f"[{request_id}] Analytics tracking failed: {e}")
+    if request.app.state.db is not None:
+        try:
+            tracker = AnalyticsTracker()
+            event = VerificationEvent(
+                request_id=request_id,
+                timestamp=datetime.now(timezone.utc).isoformat(),
+                question_preview=body.question[:80],
+                answer_preview=body.answer[:120],
+                score=final_response.score,
+                verdict=final_response.verdict,
+                sources_used=sources or [],
+                processing_time_ms=processing_time_ms,
+                claims_count=len(processed.extracted_claims),
+                evidence_chars=len(aggregated_evidence),
+                provider=getattr(judge, "provider", ""),
+                query_type=processed.query_type,
+                sentences_found=processed.sentences_found,
+                factual_sentences=processed.factual_sentences,
+                preprocessing_time_ms=preprocessing_ms,
+                retrieval_time_ms=retrieval_ms,
+                judge_time_ms=judge_ms,
+            )
+            background_tasks.add_task(
+                tracker.record_async,
+                db=request.app.state.db,
+                event=event,
+                user_id=user_id
+            )
+        except Exception as e:
+            logger.warning(f"[{request_id}] Analytics tracking failed: {e}")
+    else:
+        logger.warning(
+            f"[{request_id}] Pipeline OK but analytics tracking skipped — "
+            f"MongoDB is unavailable"
+        )
 
     # ── Background: persist per-user history to MongoDB ──────────────────────
     # This fires AFTER the response has been sent — zero latency impact.

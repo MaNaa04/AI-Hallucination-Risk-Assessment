@@ -1,8 +1,7 @@
 """
 Analytics Tracker — stores verification events for the dashboard.
 
-Uses a simple JSON file for persistence (no external DB needed).
-Keeps an in-memory buffer and flushes periodically to disk.
+Now migrated to MongoDB storage (no local JSON persistence).
 """
 
 import json
@@ -16,9 +15,6 @@ from typing import Optional
 from app.core.logging import get_logger
 
 logger = get_logger(__name__)
-
-DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "data")
-EVENTS_FILE = os.path.join(DATA_DIR, "verification_events.json")
 
 
 @dataclass
@@ -43,13 +39,14 @@ class VerificationEvent:
     preprocessing_time_ms: int = 0
     retrieval_time_ms: int = 0
     judge_time_ms: int = 0
+    user_id: str = ""  # Associated user ID
 
 
 class AnalyticsTracker:
     """
     Singleton tracker for verification analytics.
 
-    Thread-safe. Stores events in memory and flushes to a JSON file.
+    Now uses MongoDB for persistence instead of a local JSON file.
     """
 
     _instance: Optional["AnalyticsTracker"] = None
@@ -67,47 +64,48 @@ class AnalyticsTracker:
         if self._initialized:
             return
         self._initialized = True
-        self._events: list[dict] = []
-        self._flush_lock = threading.Lock()
-        self._load_from_disk()
-        logger.info(f"Analytics tracker initialized with {len(self._events)} events")
 
-    def _load_from_disk(self):
-        """Load existing events from JSON file."""
+    async def record_async(self, db, event: VerificationEvent, user_id: str):
+        """Record a verification event in MongoDB."""
+        if db is None:
+            logger.warning("MongoDB is offline — skipping analytics event record")
+            return
+
+        event.user_id = user_id
+        event_dict = asdict(event)
+
         try:
-            if os.path.exists(EVENTS_FILE):
-                with open(EVENTS_FILE, "r") as f:
-                    self._events = json.load(f)
-                logger.info(f"Loaded {len(self._events)} events from {EVENTS_FILE}")
+            from app.db.mongo import EVENTS_COLLECTION
+            await db[EVENTS_COLLECTION].insert_one(event_dict)
+            logger.info(f"Recorded event {event.request_id} in MongoDB | user={user_id} score={event.score}")
         except Exception as e:
-            logger.warning(f"Could not load events file: {e}")
-            self._events = []
+            logger.error(f"Failed to record event in MongoDB: {e}", exc_info=True)
 
-    def _flush_to_disk(self):
-        """Write events to JSON file."""
-        with self._flush_lock:
-            try:
-                os.makedirs(DATA_DIR, exist_ok=True)
-                with open(EVENTS_FILE, "w") as f:
-                    json.dump(self._events, f, indent=2)
-            except Exception as e:
-                logger.error(f"Failed to flush events to disk: {e}")
+    async def get_events_from_db(self, db, user_id: str | None = None, limit: int | None = None, sort_descending: bool = False) -> list[dict]:
+        """Fetch verification events from MongoDB."""
+        if db is None:
+            return []
 
-    def record(self, event: VerificationEvent):
-        """Record a verification event."""
-        self._events.append(asdict(event))
-        # Flush every 5 events or always (small scale)
-        if len(self._events) % 5 == 0 or len(self._events) <= 50:
-            self._flush_to_disk()
-        logger.info(f"Recorded event {event.request_id} | score={event.score} verdict={event.verdict}")
+        query = {}
+        if user_id:
+            query["user_id"] = user_id
 
-    def get_events(self, limit: int = 50) -> list[dict]:
+        order = -1 if sort_descending else 1
+        from app.db.mongo import EVENTS_COLLECTION
+        cursor = db[EVENTS_COLLECTION].find(query, {"_id": 0}).sort("timestamp", order)
+        if limit:
+            cursor = cursor.limit(limit)
+
+        return await cursor.to_list(length=limit or 10000)
+
+    async def get_events_async(self, db, user_id: str | None = None, limit: int = 50) -> list[dict]:
         """Get recent events, newest first."""
-        return list(reversed(self._events[-limit:]))
+        return await self.get_events_from_db(db, user_id, limit=limit, sort_descending=True)
 
-    def get_stats(self) -> dict:
+    async def get_stats_async(self, db, user_id: str | None = None) -> dict:
         """Compute aggregate statistics."""
-        total = len(self._events)
+        events = await self.get_events_from_db(db, user_id, sort_descending=False)
+        total = len(events)
         if total == 0:
             return {
                 "total_verifications": 0,
@@ -120,12 +118,12 @@ class AnalyticsTracker:
                 "recent_trend": [],
             }
 
-        scores = [e["score"] for e in self._events]
-        times = [e.get("processing_time_ms", 0) for e in self._events]
+        scores = [e["score"] for e in events]
+        times = [e.get("processing_time_ms", 0) for e in events]
 
         # Verdict distribution
         verdict_counts = defaultdict(int)
-        for e in self._events:
+        for e in events:
             verdict_counts[e["verdict"]] += 1
 
         # Score buckets: 0-19, 20-39, 40-59, 60-79, 80-100
@@ -144,13 +142,13 @@ class AnalyticsTracker:
 
         # Sources distribution
         source_counts = defaultdict(int)
-        for e in self._events:
+        for e in events:
             for src in e.get("sources_used", []):
                 source_counts[src] += 1
 
         # Verifications over time (group by hour)
         time_groups = defaultdict(int)
-        for e in self._events:
+        for e in events:
             ts = e.get("timestamp", "")
             if ts:
                 # Group by YYYY-MM-DD HH:00
@@ -160,7 +158,7 @@ class AnalyticsTracker:
         time_series = [{"time": k, "count": v} for k, v in sorted(time_groups.items())]
 
         # Recent trend — last 10 events scores
-        recent = [{"score": e["score"], "verdict": e["verdict"]} for e in self._events[-10:]]
+        recent = [{"score": e["score"], "verdict": e["verdict"]} for e in events[-10:]]
 
         return {
             "total_verifications": total,
@@ -173,9 +171,10 @@ class AnalyticsTracker:
             "recent_trend": recent,
         }
 
-    def get_preprocessing_stats(self) -> dict:
+    async def get_preprocessing_stats_async(self, db, user_id: str | None = None) -> dict:
         """Compute preprocessing-specific analytics for the dashboard."""
-        total = len(self._events)
+        events = await self.get_events_from_db(db, user_id, sort_descending=False)
+        total = len(events)
         if total == 0:
             return {
                 "total": 0,
@@ -190,22 +189,22 @@ class AnalyticsTracker:
 
         # Query type distribution
         qt_counts = defaultdict(int)
-        for e in self._events:
+        for e in events:
             qt = e.get("query_type", "unknown") or "unknown"
             qt_counts[qt] += 1
 
         # Averages
-        sentences = [e.get("sentences_found", 0) for e in self._events]
-        factual = [e.get("factual_sentences", 0) for e in self._events]
-        claims = [e.get("claims_count", 0) for e in self._events]
-        preprocess_times = [e.get("preprocessing_time_ms", 0) for e in self._events]
+        sentences = [e.get("sentences_found", 0) for e in events]
+        factual = [e.get("factual_sentences", 0) for e in events]
+        claims = [e.get("claims_count", 0) for e in events]
+        preprocess_times = [e.get("preprocessing_time_ms", 0) for e in events]
 
         total_sentences = sum(sentences)
         total_claims = sum(claims)
 
         # Per-event breakdown for timeline (last 20)
         timeline = []
-        for e in self._events[-20:]:
+        for e in events[-20:]:
             timeline.append({
                 "request_id": e.get("request_id", "")[:8],
                 "query_type": e.get("query_type", "unknown"),
@@ -226,9 +225,10 @@ class AnalyticsTracker:
             "preprocessing_timeline": timeline,
         }
 
-    def get_pipeline_stats(self) -> dict:
+    async def get_pipeline_stats_async(self, db, user_id: str | None = None) -> dict:
         """Compute per-stage pipeline performance stats."""
-        total = len(self._events)
+        events = await self.get_events_from_db(db, user_id, sort_descending=False)
+        total = len(events)
         if total == 0:
             return {
                 "total": 0,
@@ -236,10 +236,10 @@ class AnalyticsTracker:
                 "pipeline_timeline": [],
             }
 
-        preprocess_times = [e.get("preprocessing_time_ms", 0) for e in self._events]
-        retrieval_times = [e.get("retrieval_time_ms", 0) for e in self._events]
-        judge_times = [e.get("judge_time_ms", 0) for e in self._events]
-        total_times = [e.get("processing_time_ms", 0) for e in self._events]
+        preprocess_times = [e.get("preprocessing_time_ms", 0) for e in events]
+        retrieval_times = [e.get("retrieval_time_ms", 0) for e in events]
+        judge_times = [e.get("judge_time_ms", 0) for e in events]
+        total_times = [e.get("processing_time_ms", 0) for e in events]
 
         def stage_stats(times):
             if not times:
@@ -254,7 +254,7 @@ class AnalyticsTracker:
 
         # Per-event waterfall for last 15 events
         waterfall = []
-        for e in self._events[-15:]:
+        for e in events[-15:]:
             total_ms = e.get("processing_time_ms", 0)
             pre_ms = e.get("preprocessing_time_ms", 0)
             ret_ms = e.get("retrieval_time_ms", 0)
@@ -281,7 +281,12 @@ class AnalyticsTracker:
             "pipeline_timeline": waterfall,
         }
 
-    def clear(self):
-        """Clear all events (for testing)."""
-        self._events = []
-        self._flush_to_disk()
+    async def clear_async(self, db, user_id: str | None = None):
+        """Clear all events (optionally for a specific user)."""
+        if db is None:
+            return
+        query = {}
+        if user_id:
+            query["user_id"] = user_id
+        from app.db.mongo import EVENTS_COLLECTION
+        await db[EVENTS_COLLECTION].delete_many(query)

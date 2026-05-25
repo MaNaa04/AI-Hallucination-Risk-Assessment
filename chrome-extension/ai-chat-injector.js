@@ -630,7 +630,7 @@ async function verifyText(text, button) {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJwb3N0bWFuX3Rlc3RfdXNlcl85OTkiLCJleHAiOjE3Nzk1MjA0OTd9.2ZFYO-YBna5uwOV2m7hxv3jP6U9ywl3ut0KRE4vxjKs"
+        "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJwb3N0bWFuX3Rlc3RfdXNlcl85OTkiLCJleHAiOjIwOTUwODA2NTJ9.QymqA1qaBHiFjhhqw8Ju7uJGDKlpwvZNuI7CjFVdfAw"
       },
       body: JSON.stringify({
         question: "Is this statement factually accurate?",
