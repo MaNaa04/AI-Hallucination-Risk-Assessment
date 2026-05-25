@@ -1,7 +1,7 @@
 [
   {
-    "request_id": "86173dd1-b948-4b9e-9ea9-29519d8e46b2",
-    "timestamp": "2026-05-25T09:55:15.256455+00:00",
+    "request_id": "e6c04d91-da24-458f-a213-3cc3844edb05",
+    "timestamp": "2026-05-25T10:18:26.058489+00:00",
     "question_preview": "What is the capital of France?",
     "answer_preview": "The capital of France is Paris, located along the Seine River.",
     "score": 90,
@@ -9,20 +9,20 @@
     "sources_used": [
       "Wikipedia"
     ],
-    "processing_time_ms": 1082,
+    "processing_time_ms": 819,
     "claims_count": 2,
     "evidence_chars": 21,
     "provider": "test",
     "query_type": "encyclopedic",
     "sentences_found": 1,
     "factual_sentences": 1,
-    "preprocessing_time_ms": 1081,
+    "preprocessing_time_ms": 817,
     "retrieval_time_ms": 0,
     "judge_time_ms": 0
   },
   {
-    "request_id": "f8c28192-3eec-4a5f-9e2d-6ff730e9ba49",
-    "timestamp": "2026-05-25T09:55:15.308448+00:00",
+    "request_id": "eedb7c83-b2df-4d0a-a997-a5e97709e7a7",
+    "timestamp": "2026-05-25T10:18:26.117094+00:00",
     "question_preview": "What is the capital of France?",
     "answer_preview": "The capital of France is Paris, located along the Seine River.",
     "score": 90,
@@ -42,8 +42,8 @@
     "judge_time_ms": 0
   },
   {
-    "request_id": "997aa11a-a458-4646-9a94-1f32537007a9",
-    "timestamp": "2026-05-25T09:55:15.850404+00:00",
+    "request_id": "cd3b8eaa-e9c5-4d54-b396-5bf0a35a3cb8",
+    "timestamp": "2026-05-25T10:18:26.875043+00:00",
     "question_preview": "What is the capital of France?",
     "answer_preview": "The capital of France is Paris, located along the Seine River.",
     "score": 90,
@@ -51,20 +51,20 @@
     "sources_used": [
       "Wikipedia"
     ],
-    "processing_time_ms": 524,
+    "processing_time_ms": 739,
     "claims_count": 2,
     "evidence_chars": 21,
     "provider": "test",
     "query_type": "encyclopedic",
     "sentences_found": 1,
     "factual_sentences": 1,
-    "preprocessing_time_ms": 523,
+    "preprocessing_time_ms": 739,
     "retrieval_time_ms": 0,
     "judge_time_ms": 0
   },
   {
-    "request_id": "1bcc25af-e424-4197-8057-90cba91735cd",
-    "timestamp": "2026-05-25T09:55:16.805121+00:00",
+    "request_id": "73d5d43f-db33-4712-9733-70c2594aaafa",
+    "timestamp": "2026-05-25T10:18:27.698685+00:00",
     "question_preview": "What is the capital of France?",
     "answer_preview": "The capital of France is Paris, located along the Seine River.",
     "score": 90,
@@ -72,20 +72,20 @@
     "sources_used": [
       "Wikipedia"
     ],
-    "processing_time_ms": 912,
+    "processing_time_ms": 778,
     "claims_count": 2,
     "evidence_chars": 21,
     "provider": "test",
     "query_type": "encyclopedic",
     "sentences_found": 1,
     "factual_sentences": 1,
-    "preprocessing_time_ms": 911,
+    "preprocessing_time_ms": 776,
     "retrieval_time_ms": 0,
     "judge_time_ms": 0
   },
   {
-    "request_id": "4eb4b605-6172-4ee2-81e3-8b037ef9491b",
-    "timestamp": "2026-05-25T09:55:16.821891+00:00",
+    "request_id": "84731379-4852-4116-a2e4-074ed19ac8bc",
+    "timestamp": "2026-05-25T10:18:27.737853+00:00",
     "question_preview": "What is the capital of France?",
     "answer_preview": "The capital of France is Paris, located along the Seine River.",
     "score": 90,
@@ -105,8 +105,50 @@
     "judge_time_ms": 0
   },
   {
-    "request_id": "8dffcc80-09cc-4ba2-aa11-9ae8195af4e9",
-    "timestamp": "2026-05-25T09:55:16.827917+00:00",
+    "request_id": "7e1f10af-fe96-496b-b46f-0d863d3d92f8",
+    "timestamp": "2026-05-25T10:18:27.746571+00:00",
+    "question_preview": "What is the capital of France?",
+    "answer_preview": "The capital of France is Paris, located along the Seine River.",
+    "score": 90,
+    "verdict": "accurate",
+    "sources_used": [
+      "Wikipedia"
+    ],
+    "processing_time_ms": 1,
+    "claims_count": 1,
+    "evidence_chars": 21,
+    "provider": "test",
+    "query_type": "encyclopedic",
+    "sentences_found": 0,
+    "factual_sentences": 0,
+    "preprocessing_time_ms": 0,
+    "retrieval_time_ms": 0,
+    "judge_time_ms": 0
+  },
+  {
+    "request_id": "e0fe14db-753a-46d0-8145-8b85688693f4",
+    "timestamp": "2026-05-25T10:18:27.755569+00:00",
+    "question_preview": "What is the capital of France?",
+    "answer_preview": "The capital of France is Paris, located along the Seine River.",
+    "score": 90,
+    "verdict": "accurate",
+    "sources_used": [
+      "Wikipedia"
+    ],
+    "processing_time_ms": 1,
+    "claims_count": 1,
+    "evidence_chars": 21,
+    "provider": "test",
+    "query_type": "encyclopedic",
+    "sentences_found": 0,
+    "factual_sentences": 0,
+    "preprocessing_time_ms": 0,
+    "retrieval_time_ms": 0,
+    "judge_time_ms": 0
+  },
+  {
+    "request_id": "4c3bc03e-7477-44de-9b76-6804d44d852f",
+    "timestamp": "2026-05-25T10:18:27.762671+00:00",
     "question_preview": "What is the capital of France?",
     "answer_preview": "The capital of France is Paris, located along the Seine River.",
     "score": 90,
@@ -126,8 +168,8 @@
     "judge_time_ms": 0
   },
   {
-    "request_id": "b4db2d8f-4166-4bf0-b893-647502b53d8e",
-    "timestamp": "2026-05-25T09:55:16.833938+00:00",
+    "request_id": "0d6f361a-5044-4443-862d-9c4e1b91c9c1",
+    "timestamp": "2026-05-25T10:18:27.766752+00:00",
     "question_preview": "What is the capital of France?",
     "answer_preview": "The capital of France is Paris, located along the Seine River.",
     "score": 90,
@@ -147,8 +189,8 @@
     "judge_time_ms": 0
   },
   {
-    "request_id": "93626824-26d3-41e1-b2ae-41ce7f2ce71c",
-    "timestamp": "2026-05-25T09:55:16.837932+00:00",
+    "request_id": "cc0f780d-1712-4e66-b41d-7c37afa85f28",
+    "timestamp": "2026-05-25T10:18:27.770751+00:00",
     "question_preview": "What is the capital of France?",
     "answer_preview": "The capital of France is Paris, located along the Seine River.",
     "score": 90,
@@ -168,8 +210,29 @@
     "judge_time_ms": 0
   },
   {
-    "request_id": "ec1b3261-de67-4fff-8b0f-f9c34c8c6fb1",
-    "timestamp": "2026-05-25T09:55:16.841937+00:00",
+    "request_id": "e498ca45-a7c3-4ac1-aaab-18750715ab4a",
+    "timestamp": "2026-05-25T10:18:27.774655+00:00",
+    "question_preview": "What is the capital of France?",
+    "answer_preview": "The capital of France is Paris, located along the Seine River.",
+    "score": 90,
+    "verdict": "accurate",
+    "sources_used": [
+      "Wikipedia"
+    ],
+    "processing_time_ms": 1,
+    "claims_count": 1,
+    "evidence_chars": 21,
+    "provider": "test",
+    "query_type": "encyclopedic",
+    "sentences_found": 0,
+    "factual_sentences": 0,
+    "preprocessing_time_ms": 0,
+    "retrieval_time_ms": 0,
+    "judge_time_ms": 0
+  },
+  {
+    "request_id": "f1a3f1d1-3910-470e-9a1f-ad32eb9a8e4a",
+    "timestamp": "2026-05-25T10:18:27.777654+00:00",
     "question_preview": "What is the capital of France?",
     "answer_preview": "The capital of France is Paris, located along the Seine River.",
     "score": 90,
@@ -189,8 +252,8 @@
     "judge_time_ms": 0
   },
   {
-    "request_id": "d706a3bd-73bf-495b-946a-d8036c584f49",
-    "timestamp": "2026-05-25T09:55:16.844934+00:00",
+    "request_id": "ad3b2d45-a526-4373-bdb9-b47fb2b06745",
+    "timestamp": "2026-05-25T10:18:27.780167+00:00",
     "question_preview": "What is the capital of France?",
     "answer_preview": "The capital of France is Paris, located along the Seine River.",
     "score": 90,
@@ -210,8 +273,8 @@
     "judge_time_ms": 0
   },
   {
-    "request_id": "86f53eca-148f-488f-875a-78355a2a8950",
-    "timestamp": "2026-05-25T09:55:16.847475+00:00",
+    "request_id": "e328b4a6-69c6-4063-85a3-249f9fe2ed6a",
+    "timestamp": "2026-05-25T10:18:27.783168+00:00",
     "question_preview": "What is the capital of France?",
     "answer_preview": "The capital of France is Paris, located along the Seine River.",
     "score": 90,
@@ -231,8 +294,8 @@
     "judge_time_ms": 0
   },
   {
-    "request_id": "1cec2c9e-79fb-46fc-9831-ab3b62294908",
-    "timestamp": "2026-05-25T09:55:16.850466+00:00",
+    "request_id": "3bd7adec-21a5-4969-bf39-78c5f93a5475",
+    "timestamp": "2026-05-25T10:18:27.787169+00:00",
     "question_preview": "What is the capital of France?",
     "answer_preview": "The capital of France is Paris, located along the Seine River.",
     "score": 90,
@@ -252,8 +315,29 @@
     "judge_time_ms": 0
   },
   {
-    "request_id": "e329d8e1-ee15-415e-94d1-974c0a1a33af",
-    "timestamp": "2026-05-25T09:55:16.852466+00:00",
+    "request_id": "f24ecd14-9e88-4be4-a0ef-4d8c3e897af4",
+    "timestamp": "2026-05-25T10:18:27.791898+00:00",
+    "question_preview": "What is the capital of France?",
+    "answer_preview": "The capital of France is Paris, located along the Seine River.",
+    "score": 90,
+    "verdict": "accurate",
+    "sources_used": [
+      "Wikipedia"
+    ],
+    "processing_time_ms": 1,
+    "claims_count": 1,
+    "evidence_chars": 21,
+    "provider": "test",
+    "query_type": "encyclopedic",
+    "sentences_found": 0,
+    "factual_sentences": 0,
+    "preprocessing_time_ms": 0,
+    "retrieval_time_ms": 0,
+    "judge_time_ms": 0
+  },
+  {
+    "request_id": "aed19fc3-5cc6-4892-9b9b-40775db0ae2b",
+    "timestamp": "2026-05-25T10:18:27.796895+00:00",
     "question_preview": "What is the capital of France?",
     "answer_preview": "The capital of France is Paris, located along the Seine River.",
     "score": 90,
@@ -273,8 +357,8 @@
     "judge_time_ms": 0
   },
   {
-    "request_id": "e611f714-344c-48ad-a201-1bfbf320dce1",
-    "timestamp": "2026-05-25T09:55:16.857500+00:00",
+    "request_id": "01150a75-0220-4bc6-b615-a593f212b812",
+    "timestamp": "2026-05-25T10:18:27.800895+00:00",
     "question_preview": "What is the capital of France?",
     "answer_preview": "The capital of France is Paris, located along the Seine River.",
     "score": 90,
@@ -294,8 +378,8 @@
     "judge_time_ms": 0
   },
   {
-    "request_id": "6f30431b-b0e9-4120-9f0c-481d81708eed",
-    "timestamp": "2026-05-25T09:55:16.860504+00:00",
+    "request_id": "9e190ce4-ef54-4b87-962f-8237249ce74a",
+    "timestamp": "2026-05-25T10:18:27.803894+00:00",
     "question_preview": "What is the capital of France?",
     "answer_preview": "The capital of France is Paris, located along the Seine River.",
     "score": 90,
@@ -315,8 +399,8 @@
     "judge_time_ms": 0
   },
   {
-    "request_id": "de5769c5-2601-4859-8951-f2fe13b98c15",
-    "timestamp": "2026-05-25T09:55:16.862510+00:00",
+    "request_id": "1cd4bc69-af23-45f4-97f6-c08eed648158",
+    "timestamp": "2026-05-25T10:18:27.806894+00:00",
     "question_preview": "What is the capital of France?",
     "answer_preview": "The capital of France is Paris, located along the Seine River.",
     "score": 90,
@@ -336,8 +420,8 @@
     "judge_time_ms": 0
   },
   {
-    "request_id": "c062df20-2b73-4b76-8f16-39de15da0c82",
-    "timestamp": "2026-05-25T09:55:16.865497+00:00",
+    "request_id": "5cf6b957-26c3-4bdf-8a1c-7154af08b944",
+    "timestamp": "2026-05-25T10:18:27.808900+00:00",
     "question_preview": "What is the capital of France?",
     "answer_preview": "The capital of France is Paris, located along the Seine River.",
     "score": 90,
@@ -357,8 +441,8 @@
     "judge_time_ms": 0
   },
   {
-    "request_id": "7a2fdb74-1488-46ce-978e-1c923b2d3bd9",
-    "timestamp": "2026-05-25T09:55:16.868507+00:00",
+    "request_id": "818c450d-bd4e-42b3-b80d-ab670936cf8c",
+    "timestamp": "2026-05-25T10:18:27.811900+00:00",
     "question_preview": "What is the capital of France?",
     "answer_preview": "The capital of France is Paris, located along the Seine River.",
     "score": 90,
@@ -378,8 +462,8 @@
     "judge_time_ms": 0
   },
   {
-    "request_id": "4fa6314f-11f8-4022-8665-e22d1a45719b",
-    "timestamp": "2026-05-25T09:55:16.871649+00:00",
+    "request_id": "5fd9c2f0-491e-4418-85ba-6243a266f285",
+    "timestamp": "2026-05-25T10:18:27.814900+00:00",
     "question_preview": "What is the capital of France?",
     "answer_preview": "The capital of France is Paris, located along the Seine River.",
     "score": 90,
@@ -399,8 +483,8 @@
     "judge_time_ms": 0
   },
   {
-    "request_id": "b8b1740b-fbfe-4f75-8cae-cc7328e13f39",
-    "timestamp": "2026-05-25T09:55:16.875177+00:00",
+    "request_id": "ff1e6208-e164-4989-be11-1008e1ebf918",
+    "timestamp": "2026-05-25T10:18:27.816901+00:00",
     "question_preview": "What is the capital of France?",
     "answer_preview": "The capital of France is Paris, located along the Seine River.",
     "score": 90,
@@ -420,8 +504,8 @@
     "judge_time_ms": 0
   },
   {
-    "request_id": "a06dd5b0-becf-4dfe-bac5-a543d3f234f1",
-    "timestamp": "2026-05-25T09:55:16.878176+00:00",
+    "request_id": "ad381517-360d-434c-9c83-cd27876c7b98",
+    "timestamp": "2026-05-25T10:18:27.942383+00:00",
     "question_preview": "What is the capital of France?",
     "answer_preview": "The capital of France is Paris, located along the Seine River.",
     "score": 90,
@@ -429,91 +513,9 @@
     "sources_used": [
       "Wikipedia"
     ],
-    "processing_time_ms": 0,
-    "claims_count": 1,
-    "evidence_chars": 21,
-    "provider": "test",
-    "query_type": "encyclopedic",
-    "sentences_found": 0,
-    "factual_sentences": 0,
-    "preprocessing_time_ms": 0,
-    "retrieval_time_ms": 0,
-    "judge_time_ms": 0
-  },
-  {
-    "request_id": "3e35461e-dec5-4dc8-bd64-ca146fccacec",
-    "timestamp": "2026-05-25T09:55:16.880176+00:00",
-    "question_preview": "What is the capital of France?",
-    "answer_preview": "The capital of France is Paris, located along the Seine River.",
-    "score": 90,
-    "verdict": "accurate",
-    "sources_used": [
-      "Wikipedia"
-    ],
-    "processing_time_ms": 0,
-    "claims_count": 1,
-    "evidence_chars": 21,
-    "provider": "test",
-    "query_type": "encyclopedic",
-    "sentences_found": 0,
-    "factual_sentences": 0,
-    "preprocessing_time_ms": 0,
-    "retrieval_time_ms": 0,
-    "judge_time_ms": 0
-  },
-  {
-    "request_id": "617e5310-ac78-4455-8f79-53b23d75bb9d",
-    "timestamp": "2026-05-25T09:55:16.883177+00:00",
-    "question_preview": "What is the capital of France?",
-    "answer_preview": "The capital of France is Paris, located along the Seine River.",
-    "score": 90,
-    "verdict": "accurate",
-    "sources_used": [
-      "Wikipedia"
-    ],
-    "processing_time_ms": 0,
-    "claims_count": 1,
-    "evidence_chars": 21,
-    "provider": "test",
-    "query_type": "encyclopedic",
-    "sentences_found": 0,
-    "factual_sentences": 0,
-    "preprocessing_time_ms": 0,
-    "retrieval_time_ms": 0,
-    "judge_time_ms": 0
-  },
-  {
-    "request_id": "d9708319-226e-4fec-a15f-55a92b7b32e0",
-    "timestamp": "2026-05-25T09:55:16.887223+00:00",
-    "question_preview": "What is the capital of France?",
-    "answer_preview": "The capital of France is Paris, located along the Seine River.",
-    "score": 90,
-    "verdict": "accurate",
-    "sources_used": [
-      "Wikipedia"
-    ],
-    "processing_time_ms": 0,
-    "claims_count": 1,
-    "evidence_chars": 21,
-    "provider": "test",
-    "query_type": "encyclopedic",
-    "sentences_found": 0,
-    "factual_sentences": 0,
-    "preprocessing_time_ms": 0,
-    "retrieval_time_ms": 0,
-    "judge_time_ms": 0
-  },
-  {
-    "request_id": "53619e08-2934-4540-b183-bd424a052cc1",
-    "timestamp": "2026-05-25T09:55:17.040054+00:00",
-    "question_preview": "What is the capital of France?",
-    "answer_preview": "The capital of France is Paris, located along the Seine River.",
-    "score": 90,
-    "verdict": "accurate",
-    "sources_used": [
-      "Wikipedia"
-    ],
-    "processing_time_ms": 0,
+    "processing_time_ms": 1,
     "claims_count": 1,
     "evidence_chars": 48,
-    "provider": 
+    "provider": "test"
+  }
+]

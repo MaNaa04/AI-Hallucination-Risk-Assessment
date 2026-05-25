@@ -3,7 +3,7 @@ Response models for API output formatting.
 Layer 5: Response Builder
 """
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from typing import Optional, Literal
 
 
@@ -197,8 +197,8 @@ class VerifyResponse(BaseModel):
             model=model,
         )
     
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "score": 85,
                 "verdict": "accurate",
@@ -223,3 +223,4 @@ class VerifyResponse(BaseModel):
                 ],
             }
         }
+    )
