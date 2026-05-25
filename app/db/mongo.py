@@ -195,4 +195,7 @@ class UserHistoryRepository:
             .limit(limit)
         )
         docs = await cursor.to_list(length=limit)
+        for doc in docs:
+            if doc and "_id" in doc:
+                doc["_id"] = str(doc["_id"])
         return docs
