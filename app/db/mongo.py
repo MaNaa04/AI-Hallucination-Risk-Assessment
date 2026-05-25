@@ -127,14 +127,27 @@ class UserHistoryRepository:
 
         Args:
             record_dict: A plain dictionary produced by
-                         ``UserHistoryRecord.model_dump()``.
+                         ``UserHistoryRecord.to_mongo_doc()``.
+                         Must already have UUIDs and datetimes converted
+                         to BSON-safe types (str / datetime).
 
         Returns:
             The inserted document's ``_id`` as a hex string.
+
+        Raises:
+            No exceptions propagate — errors are logged and the method
+            returns an empty string so background threads exit gracefully.
         """
-        result = await self._col.insert_one(record_dict)
-        logger.debug(f"Inserted history record _id={result.inserted_id}")
-        return str(result.inserted_id)
+        try:
+            result = await self._col.insert_one(record_dict)
+            logger.debug(f"Inserted history record _id={result.inserted_id}")
+            return str(result.inserted_id)
+        except Exception as exc:
+            logger.error(
+                f"MongoDB insert failed (non-fatal): {exc}",
+                exc_info=True,
+            )
+            return ""
 
     async def list_for_user(
         self,
