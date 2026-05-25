@@ -4,7 +4,14 @@
  * Displays results in a right-side panel (like Gemini)
  */
 
-const API_URL = "http://127.0.0.1:8000/api/verify";
+// Sanitize untrusted LLM output before inserting into innerHTML
+function escapeHTML(str) {
+  const div = document.createElement("div");
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+const API_URL = "http://localhost:8000/api/verify";
 let isInjecting = false;
 
 // Create and manage right-side panel
@@ -288,6 +295,88 @@ function createRightPanel() {
       #hd-right-panel {
         width: 100%;
       }
+    }
+
+    /* Per-claim cards */
+    .hd-claims-title {
+      font-size: 12px;
+      font-weight: 600;
+      color: #5f6368;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin: 12px 0 8px;
+      padding-top: 12px;
+      border-top: 1px solid #e5e5e5;
+    }
+
+    .hd-claim-card {
+      padding: 10px 12px;
+      margin-bottom: 6px;
+      border-radius: 8px;
+      border-left: 3px solid;
+      background: #f8f9fa;
+    }
+
+    .hd-claim-card.accurate {
+      border-left-color: #28a745;
+      background: #f6fef8;
+    }
+
+    .hd-claim-card.uncertain {
+      border-left-color: #ffc107;
+      background: #fffdf5;
+    }
+
+    .hd-claim-card.hallucination {
+      border-left-color: #dc3545;
+      background: #fff5f5;
+    }
+
+    .hd-claim-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 4px;
+    }
+
+    .hd-claim-verdict {
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .hd-claim-card.accurate .hd-claim-verdict { color: #155724; }
+    .hd-claim-card.uncertain .hd-claim-verdict { color: #856404; }
+    .hd-claim-card.hallucination .hd-claim-verdict { color: #721c24; }
+
+    .hd-claim-score {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: 700;
+      color: white;
+      flex-shrink: 0;
+    }
+
+    .hd-claim-score.high { background: linear-gradient(135deg, #28a745, #20c997); }
+    .hd-claim-score.mid { background: linear-gradient(135deg, #ffc107, #ff9800); }
+    .hd-claim-score.low { background: linear-gradient(135deg, #dc3545, #c82333); }
+
+    .hd-claim-text {
+      font-size: 12px;
+      color: #495057;
+      line-height: 1.5;
+      margin-bottom: 2px;
+      font-style: italic;
+    }
+
+    .hd-claim-explanation {
+      font-size: 11px;
+      color: #6c757d;
+      line-height: 1.4;
     }
   `;
 
@@ -576,7 +665,7 @@ async function verifyText(text, button) {
 
 // Show verification result in right panel
 function showResultInPanel(data) {
-  const { score, verdict, explanation, sources_used } = data;
+  const { score, verdict, explanation, sources_used, claim_results } = data;
   const panel = createRightPanel();
   const content = panel.querySelector("#hd-panel-content");
 
@@ -611,6 +700,32 @@ function showResultInPanel(data) {
     `;
   }
 
+  // Build per-claim HTML
+  let claimsHTML = "";
+  if (claim_results && claim_results.length > 0) {
+    const verdictLabels = {
+      accurate: "✅ Accurate",
+      uncertain: "⚠️ Uncertain",
+      hallucination: "🚩 Hallucination",
+    };
+
+    claimsHTML = '<div class="hd-claims-title">Per-Claim Breakdown</div>';
+    claim_results.forEach((claim) => {
+      const claimScoreClass = claim.score >= 70 ? "high" : claim.score >= 40 ? "mid" : "low";
+      const claimVerdict = verdictLabels[claim.verdict] || "❓ Unknown";
+      claimsHTML += `
+        <div class="hd-claim-card ${claim.verdict}">
+          <div class="hd-claim-header">
+            <span class="hd-claim-verdict">${claimVerdict}</span>
+            <div class="hd-claim-score ${claimScoreClass}">${claim.score}</div>
+          </div>
+          <div class="hd-claim-text">"${escapeHTML(claim.claim_text)}"</div>
+          <div class="hd-claim-explanation">${escapeHTML(claim.explanation)}</div>
+        </div>
+      `;
+    });
+  }
+
   content.innerHTML = `
     <div class="hd-panel-result">
       <div class="hd-result-score">
@@ -621,6 +736,7 @@ function showResultInPanel(data) {
         ${explanation}
       </div>
       ${sourcesHTML}
+      ${claimsHTML}
     </div>
 
     <div style="padding: 0 16px; margin-top: 24px;">

@@ -40,7 +40,7 @@ TruthLens/
 │   │   │   ├── source_router.py       # Smart routing
 │   │   │   └── evidence_aggregator.py # Dedup, rank, trim evidence
 │   │   ├── judge/
-│   │   │   └── llm_judge.py           # LLM-based verdict (Groq/Gemini)
+│   │   │   └── llm_judge.py           # LLM-based verdict (Gemini/OpenAI/Groq/Grok/Anthropic)
 │   │   └── analytics/
 │   │       └── tracker.py             # Event storage & stats
 │   ├── models/
@@ -60,9 +60,13 @@ TruthLens/
 │   ├── styles.css              #    Premium dark glassmorphism theme
 │   └── app.js                  #    Charts, pipeline breakdown
 │
-├── tests/                      # 🧪 Tests
-│   ├── test_preprocessor.py
-│   └── test_retrievers.py
+├── tests/                      # 🧪 Tests (110 tests, 0 failures)
+│   ├── conftest.py             #    Shared test fixtures
+│   ├── test_models.py          #    Model validation tests (31)
+│   ├── test_judge.py           #    LLM judge tests (26)
+│   ├── test_preprocessor.py    #    Preprocessing tests (21)
+│   ├── test_retrievers.py      #    Retrieval engine tests (21)
+│   └── test_verify.py          #    API endpoint tests (11)
 │
 ├── data/                       # 💾 Analytics data (auto-created)
 │   └── verification_events.json
@@ -110,9 +114,9 @@ Edit `.env` and fill in your keys:
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `LLM_PROVIDER` | ✅ | `gemini` (free) or `openai` |
+| `LLM_PROVIDER` | ✅ | `gemini`, `openai`, `groq`, `grok`, or `anthropic` |
 | `LLM_API_KEY` | ✅ | Your LLM API key |
-| `LLM_MODEL` | ✅ | Model name (e.g. `gemini-2.0-flash`) |
+| `LLM_MODEL` | ✅ | Model name (e.g. `llama-3.3-70b-versatile`) |
 | `SERPAPI_KEY` | ✅ | SerpAPI key for web search |
 | `WIKIPEDIA_API_ENABLED` | — | `true` (default) |
 | `MAX_CLAIMS_PER_REQUEST` | — | `3` (default) |
@@ -125,6 +129,22 @@ Edit `.env` and fill in your keys:
 | `REDIS_URL` | — | `redis://localhost:6379/0` (default) |
 | `REDIS_ENABLED` | — | `true` (default) |
 
+> **⚠️ Tested & Verified Configuration:**
+>
+> | Provider | Model | Status | Notes |
+> |----------|-------|--------|-------|
+> | **Groq** | `llama-3.3-70b-versatile` | ✅ **Tested & Working** | Free, fast (~3s judge), recommended |
+> | Gemini | `gemini-2.0-flash` | ⚠️ Free tier quota limits | Daily request limit exhausts quickly |
+> | OpenAI | `gpt-4` | ❌ Requires paid plan | Free API keys don't have access |
+> | OpenAI | `gpt-4o-mini` | ⚠️ Requires billing | Returns `insufficient_quota` without credits |
+> | Groq | `llama3-70b-8192` | ❌ Decommissioned | Use `llama-3.3-70b-versatile` instead |
+>
+> **Recommended `.env` for quick start:**
+> ```
+> LLM_PROVIDER=groq
+> LLM_API_KEY=<your-groq-key-from-console.groq.com>
+> LLM_MODEL=llama-3.3-70b-versatile
+> ```
 
 ### 3. Start the Backend
 
@@ -225,7 +245,18 @@ Verify if an AI answer contains hallucinations.
   "flag": false,
   "sources_used": ["Wikipedia"],
   "request_id": "a1b2c3d4-...",
-  "processing_time_ms": 1250
+  "processing_time_ms": 1250,
+  "cache_hit": false,
+  "provider": "gemini",
+  "model": "gemini-2.0-flash",
+  "claim_results": [
+    {
+      "claim_text": "Paris is the capital of France",
+      "score": 95,
+      "verdict": "accurate",
+      "explanation": "Confirmed by Wikipedia."
+    }
+  ]
 }
 ```
 
@@ -290,17 +321,21 @@ User Input → [Layer 1: API Gateway]
                 - Classify query type (encyclopedic / recent_event / numeric / opinion)
                     ↓
              [Layer 3: Evidence Retrieval]
-                - Wikipedia (encyclopedic facts)
+                - Wikipedia (async httpx calls)
                 - SerpAPI (recent events, web search)
                 - Aggregate & deduplicate evidence
                     ↓
              [Layer 4: LLM Judge]
                 - Evidence-grounded evaluation
                 - Score 0–100 with explanation
+             [Layer 4b: Per-Claim Judge]       ← NEW
+                - Individual claim scoring
+                - Text-position mapping for highlighting
                     ↓
              [Layer 5: Response Builder]
                 - Map score to verdict
-                - Format for frontend
+                - Attach per-claim breakdown
+                - Include provider/model metadata
 ```
 
 ### Why Evidence-Grounded Judging?
@@ -313,10 +348,16 @@ User Input → [Layer 1: API Gateway]
 ## 🧪 Testing
 
 ```bash
-# Run tests
+# Run full test suite (110 tests)
 python -m pytest tests/ -v
 
 # Manual test with curl (requires a valid JWT token matching your JWT_SECRET)
+# Run specific test files
+python -m pytest tests/test_judge.py -v         # LLM judge tests
+python -m pytest tests/test_verify.py -v         # API endpoint tests
+python -m pytest tests/test_models.py -v         # Model validation tests
+
+# Manual test with curl
 curl -X POST "http://localhost:8000/api/verify" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer <jwt-token>" \
@@ -347,8 +388,8 @@ curl -X POST "http://localhost:8000/api/verify" \
 | Component | Technology |
 |-----------|-----------|
 | Backend | Python, FastAPI, Uvicorn |
-| LLM | Gemini (default) / OpenAI / Groq |
-| Evidence | Wikipedia API, SerpAPI |
+| LLM | Gemini (default) / OpenAI / Groq / Grok / Anthropic |
+| Evidence | Wikipedia (async httpx), SerpAPI |
 | Extension | Chrome Manifest V3, vanilla JS |
 | Dashboards | HTML/CSS/JS, Chart.js |
 | Data | MongoDB (per-user history), Redis (global caching), JSON file storage (legacy analytics) |

@@ -32,7 +32,7 @@ from app.core.cache import get_cached, set_cached
 from app.db.mongo import UserHistoryRepository
 from app.models.history import UserHistoryRecord
 from app.models.request import VerifyRequest
-from app.models.response import VerifyResponse, JudgeResponse
+from app.models.response import VerifyResponse, JudgeResponse, ClaimResult
 from app.services.preprocessing.query_preprocessor import QueryPreprocessor
 from app.services.analytics.tracker import AnalyticsTracker, VerificationEvent
 
@@ -269,8 +269,30 @@ async def verify(
             explanation="Verification could not be completed due to service error.",
             flag=False,
         )
+    
+    # ── Layer 4b — Per-Claim Fine-Grained Scoring ─────────────────────────────
+    claim_results = None
+    try:
+        if processed.extracted_claims:
+            raw_claim_results = await judge.judge_per_claim(
+                request.question,
+                request.answer,
+                aggregated_evidence,
+                processed.extracted_claims,
+            )
+            if raw_claim_results:
+                claim_results = [
+                    ClaimResult(**cr) for cr in raw_claim_results
+                ]
+                logger.info(
+                    f"[{request_id}] Per-claim scoring complete | "
+                    f"claims_scored={len(claim_results)}"
+                )
+    except Exception as e:
+        logger.warning(f"[{request_id}] Per-claim scoring failed (non-fatal): {e}")
+        claim_results = None
 
-    # ── Layer 5 — Response Building ──────────────────────────────────────────
+    # ── Layer 5 — Response Building ────────────────────────────────
     processing_time_ms = int((time.perf_counter() - pipeline_start) * 1000)
     sources = list(evidence_map.keys()) if evidence_map else None
 
@@ -279,7 +301,22 @@ async def verify(
         "evidence_found": bool(aggregated_evidence),
         "evidence_snippets": evidence_map,
         "query_type": processed.query_type,
+        "timing": {
+            "preprocessing_ms": preprocessing_ms,
+            "retrieval_ms": retrieval_ms,
+            "judge_ms": judge_ms,
+            "total_ms": processing_time_ms,
+        },
     }
+    
+    # Extract provider/model info for benchmarking
+    judge_provider = getattr(judge, 'provider', None)
+    judge_model = getattr(judge, 'model', None)
+    # Ensure these are strings (getattr on MagicMock returns mock objects)
+    if judge_provider and not isinstance(judge_provider, str):
+        judge_provider = None
+    if judge_model and not isinstance(judge_model, str):
+        judge_model = None
 
     final_response = VerifyResponse.from_judge_response(
         judge_resp=judge_response,
@@ -287,6 +324,9 @@ async def verify(
         request_id=request_id,
         processing_time_ms=processing_time_ms,
         debug=debug_info,
+        claim_results=claim_results,
+        provider=judge_provider,
+        model=judge_model,
     )
 
     # ── Layer 5b — Cache the completed result ─────────────────────────────────

@@ -1,5 +1,12 @@
 const API_URL = "http://localhost:8000/api/verify";
 
+// Sanitize untrusted LLM output before inserting into innerHTML
+function escapeHTML(str) {
+  const div = document.createElement("div");
+  div.textContent = str;
+  return div.innerHTML;
+}
+
 document.addEventListener("DOMContentLoaded", () => {
   const textArea = document.getElementById("ai-text");
   const verifyBtn = document.getElementById("verify-btn");
@@ -129,6 +136,40 @@ document.addEventListener("DOMContentLoaded", () => {
         .join("");
     } else {
       sourcesEl.innerHTML = '<span class="source-tag">None</span>';
+    }
+
+    // Per-claim breakdown
+    const claimsDiv = document.getElementById("claims-breakdown");
+    if (data.claim_results && data.claim_results.length > 0) {
+      const verdictLabels = {
+        accurate: "✅ Accurate",
+        uncertain: "⚠️ Uncertain",
+        hallucination: "🚩 Hallucination",
+      };
+
+      let claimsHTML = '<div class="claims-section">';
+      claimsHTML += '<div class="claims-title">Per-Claim Breakdown</div>';
+
+      data.claim_results.forEach((claim) => {
+        const scoreClass = claim.score >= 70 ? "high" : claim.score >= 40 ? "mid" : "low";
+        const verdictLabel = verdictLabels[claim.verdict] || "❓ Unknown";
+
+        claimsHTML += `
+          <div class="claim-card ${claim.verdict}">
+            <div class="claim-header">
+              <span class="claim-verdict">${verdictLabel}</span>
+              <div class="claim-score ${scoreClass}">${claim.score}</div>
+            </div>
+            <div class="claim-text">"${escapeHTML(claim.claim_text)}"</div>
+            <div class="claim-explanation">${escapeHTML(claim.explanation)}</div>
+          </div>
+        `;
+      });
+
+      claimsHTML += '</div>';
+      claimsDiv.innerHTML = claimsHTML;
+    } else {
+      claimsDiv.innerHTML = '';
     }
   }
 

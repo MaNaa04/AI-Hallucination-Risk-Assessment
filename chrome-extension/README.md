@@ -25,10 +25,16 @@ A professional Chrome extension that helps you verify AI-generated content in re
   - 📖 Score interpretation guide
   - Smooth slide-in animation
 
-### 3. **Smart Verification**
+### 3. **Per-Claim Breakdown** ⭐ NEW!
+- Each verified response shows individual claim scores
+- Color-coded claim cards (green/yellow/red by verdict)
+- Exact text mapping back to the original AI answer
+- Available in both popup and right-side panel
+
+### 4. **Smart Verification**
 - Uses Wikipedia + Web Search (SerpAPI) for evidence
-- Powered by Groq LLM for intelligent fact-checking
-- Shows confidence scores (0-100)
+- Multi-LLM support: Gemini, OpenAI, Groq, Grok, Anthropic
+- Shows confidence scores (0-100) with per-claim breakdown
 - Displays sources used for verification
 
 ## 🚀 Installation
@@ -91,6 +97,7 @@ INFO:     Uvicorn running on http://0.0.0.0:8000
    - Full explanation
    - Source badges
    - Score interpretation guide
+   - **Per-claim breakdown cards** (each claim scored individually)
 7. Close with the X button or reload page
 
 ## 🎨 UI Design
@@ -211,12 +218,13 @@ AI Answer: Python is the best programming language.
 Expected: Right panel shows 40-60 score, ⚠️ Uncertain
 ```
 
-## 🔐 Privacy
+## 🔐 Privacy & Security
 
 - Extension only sends text you explicitly verify
 - No data is stored or logged
 - All processing happens via your local backend
 - No third-party tracking
+- **XSS protection**: All LLM-generated text is sanitized with `escapeHTML()` before rendering
 
 ## 📝 Files
 

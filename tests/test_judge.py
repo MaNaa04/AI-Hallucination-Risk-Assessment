@@ -93,12 +93,12 @@ class TestParseJudgeResponse:
         result = judge._parse_judge_response(raw)
         assert result.verdict == "unverifiable"
 
-    def test_no_json_returns_fallback(self):
+    def test_no_json_returns_heuristic_fallback(self):
+        """When no JSON is found, parser returns heuristic 50/unverifiable."""
         judge = self._make_judge()
         result = judge._parse_judge_response("This has no JSON at all.")
         assert result.score == 50
         assert result.verdict == "unverifiable"
-
 
 
 # ── Judge Method Tests ─────────────────────────────────────────────
@@ -141,7 +141,7 @@ class TestJudge:
         judge.api_key = "real-key"
         judge.provider = "gemini"
 
-        # Mock the AsyncOpenAI chat completions response
+        # Mock the OpenAI-compat async response
         mock_choice = MagicMock()
         mock_choice.message.content = json.dumps({
             "score": 85,
@@ -150,7 +150,9 @@ class TestJudge:
             "flag": False
         })
         mock_client = MagicMock()
-        mock_client.chat.completions.create = AsyncMock(return_value=MagicMock(choices=[mock_choice]))
+        mock_client.chat.completions.create = AsyncMock(
+            return_value=MagicMock(choices=[mock_choice])
+        )
         judge.client = mock_client
 
         result = await judge.judge("What is Paris?", "Paris is the capital.", "Paris is the capital of France.")
@@ -168,9 +170,11 @@ class TestJudge:
         judge = LLMJudge()
         judge.provider = "gemini"
         judge.api_key = "real-key"
-        
+
         mock_client = MagicMock()
-        mock_client.chat.completions.create = AsyncMock(side_effect=Exception("API timeout"))
+        mock_client.chat.completions.create = AsyncMock(
+            side_effect=Exception("API timeout")
+        )
         judge.client = mock_client
 
         result = await judge.judge("Q", "A", "E")
@@ -178,3 +182,140 @@ class TestJudge:
         assert result.score == 50
         assert result.verdict == "unverifiable"
 
+
+# ── Per-Claim Judging Tests ────────────────────────────────────────
+
+class TestJudgePerClaim:
+    """Tests for the judge_per_claim() method."""
+
+    @pytest.mark.asyncio
+    @patch("app.services.judge.llm_judge.get_settings")
+    async def test_per_claim_success(self, mock_settings):
+        mock_settings.return_value = MagicMock(
+            llm_api_key="real-key", llm_model="gemini-2.0-flash", llm_provider="gemini"
+        )
+
+        judge = LLMJudge()
+        judge.api_key = "real-key"
+        judge.provider = "gemini"
+
+        per_claim_response = json.dumps([
+            {
+                "claim_index": 0,
+                "claim_text": "Paris is the capital of France",
+                "score": 95,
+                "verdict": "verified",
+                "explanation": "Confirmed by Wikipedia."
+            },
+            {
+                "claim_index": 1,
+                "claim_text": "It has 10 million people",
+                "score": 30,
+                "verdict": "likely_hallucination",
+                "explanation": "Paris city proper has about 2.1 million."
+            }
+        ])
+
+        mock_choice = MagicMock()
+        mock_choice.message.content = per_claim_response
+        mock_client = MagicMock()
+        mock_client.chat.completions.create = AsyncMock(return_value=MagicMock(choices=[mock_choice]))
+        judge.client = mock_client
+
+        results = await judge.judge_per_claim(
+            "What about Paris?",
+            "Paris is the capital of France. It has 10 million people.",
+            "Paris is the capital of France. Population: ~2.1 million.",
+            ["Paris is the capital of France", "It has 10 million people"],
+        )
+
+        assert len(results) == 2
+        assert results[0]["verdict"] == "accurate"
+        assert results[0]["score"] == 95
+        assert results[1]["verdict"] == "hallucination"
+        assert results[1]["score"] == 30
+
+    @pytest.mark.asyncio
+    @patch("app.services.judge.llm_judge.get_settings")
+    async def test_per_claim_empty_claims(self, mock_settings):
+        mock_settings.return_value = MagicMock(
+            llm_api_key="real-key", llm_model="test", llm_provider="gemini"
+        )
+        judge = LLMJudge()
+        judge.api_key = "real-key"
+        judge.client = MagicMock()
+
+        results = await judge.judge_per_claim("Q", "A", "E", [])
+        assert results == []
+
+    @pytest.mark.asyncio
+    @patch("app.services.judge.llm_judge.get_settings")
+    async def test_per_claim_no_client(self, mock_settings):
+        mock_settings.return_value = MagicMock(
+            llm_api_key="", llm_model="test", llm_provider="gemini"
+        )
+        judge = LLMJudge()
+
+        results = await judge.judge_per_claim("Q", "A", "E", ["claim1"])
+        assert results == []
+
+    @pytest.mark.asyncio
+    @patch("app.services.judge.llm_judge.get_settings")
+    async def test_per_claim_api_error_returns_empty(self, mock_settings):
+        mock_settings.return_value = MagicMock(
+            llm_api_key="real-key", llm_model="test", llm_provider="gemini"
+        )
+        judge = LLMJudge()
+        judge.api_key = "real-key"
+
+        mock_client = MagicMock()
+        mock_client.chat.completions.create = AsyncMock(side_effect=Exception("API timeout"))
+        judge.client = mock_client
+
+        results = await judge.judge_per_claim("Q", "A", "E", ["claim1"])
+        assert results == []
+
+
+# ── Anthropic Provider Tests ───────────────────────────────────────
+
+class TestAnthropicProvider:
+    """Tests for Anthropic Claude provider integration."""
+
+    @patch("app.services.judge.llm_judge.get_settings")
+    def test_anthropic_init(self, mock_settings):
+        """Test that Anthropic provider initializes correctly."""
+        mock_settings.return_value = MagicMock(
+            llm_api_key="test-anthropic-key",
+            llm_model="claude-sonnet-4-20250514",
+            llm_provider="anthropic"
+        )
+        judge = LLMJudge()
+        assert judge.anthropic_client is not None
+        assert judge.client is None
+        assert judge.model == "claude-sonnet-4-20250514"
+
+    @pytest.mark.asyncio
+    @patch("app.services.judge.llm_judge.get_settings")
+    async def test_anthropic_judge_success(self, mock_settings):
+        mock_settings.return_value = MagicMock(
+            llm_api_key="test-key",
+            llm_model="claude-sonnet-4-20250514",
+            llm_provider="anthropic"
+        )
+        judge = LLMJudge()
+
+        # Mock the Anthropic client response
+        mock_content = MagicMock()
+        mock_content.text = json.dumps({
+            "score": 88,
+            "verdict": "verified",
+            "explanation": "Claude confirms the claim.",
+            "flag": False
+        })
+        mock_response = MagicMock()
+        mock_response.content = [mock_content]
+        judge.anthropic_client.messages.create = AsyncMock(return_value=mock_response)
+
+        result = await judge.judge("What is Paris?", "Paris is the capital.", "Evidence here.")
+        assert result.score == 88
+        assert result.verdict == "verified"

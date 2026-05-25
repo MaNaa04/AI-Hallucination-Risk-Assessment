@@ -75,9 +75,10 @@ Evidence: "Paris is the capital and largest city of France..."
 ```
 
 **Technical Details**:
-- Library: `wikipedia-api` (not `wikipedia`)
-- Timeout: Set 5-10 second timeout for robustness
+- Implementation: Direct async `httpx` HTTP calls to the Wikipedia MediaWiki API
+- Timeout: 10 second timeout per request for robustness
 - Error handling: Return `{"found": False}` on failures
+- Caching: Results cached in-memory to avoid duplicate lookups
 
 #### Part B: SerpAPI Retriever
 ```
@@ -121,7 +122,7 @@ Selected Sources: []
   Shorter, clearer snippets prioritized
         ↓
 [Step 3: Trim to Budget]
-  Max 800 tokens (~3200 chars)
+  Max 2000 tokens (~8000 chars) — configurable via MAX_EVIDENCE_TOKENS
   Keep important info, drop boilerplate
         ↓
 Final Evidence (ready for judge)
@@ -129,7 +130,7 @@ Final Evidence (ready for judge)
 
 **Token Estimation**:
 - 1 token ≈ 4 characters (rough estimate)
-- 800 tokens ≈ 3200 characters
+- 2000 tokens ≈ 8000 characters (default budget)
 
 ### Layer 4: LLM Judge
 ```
@@ -156,11 +157,12 @@ JSON Response:
 - Include score range (0-100) definition
 - Request 1-2 sentence explanation
 
-**Supported LLM Providers** (implement in config):
-- OpenAI: GPT-4, GPT-3.5-turbo
-- Anthropic: Claude 3, Claude 2
-- Azure OpenAI
-- Locally hosted: LLaMA, Mistral, etc.
+**Supported LLM Providers** (all implemented):
+- Google Gemini: `gemini-2.0-flash` (default, free tier available)
+- OpenAI: GPT-4, GPT-4o, GPT-3.5-turbo (via OpenAI SDK)
+- Groq: `llama3-70b-8192` (via OpenAI-compat endpoint)
+- Grok (xAI): Via OpenAI-compat endpoint
+- Anthropic: Claude Sonnet, Claude Haiku (via native AsyncAnthropic SDK)
 
 ### Layer 5: Response Builder
 ```
@@ -194,21 +196,18 @@ Final Response:
 **Decision File**: `app/models/response.py`
 
 ### 2. Single vs. Per-Claim Scoring
-**Option A**: Single score for entire answer (Current)
-- Simpler UI/UX
-- Easier to display to users
-- Cons: Loses granularity (one false claim tanks whole answer)
-
-**Option B**: Per-claim scores
-- More precise assessment
-- Can show which specific claims are risky
-- Cons: Complex UI, harder to present to users
+**Both are now implemented**:
+- **Global score**: Single 0–100 score for the entire answer (Layer 4)
+- **Per-claim scores**: Each extracted claim gets its own score, verdict, and explanation (Layer 4b)
+- Per-claim results include character-offset mapping (`start_index`, `end_index`) for highlighting
+- Chrome Extension renders both: overall badge + expandable per-claim breakdown cards
+- Per-claim scoring is non-blocking: if it fails, the response still returns with `claim_results: null`
 
 ### 3. Evidence Budget
-**Decision**: ~800 tokens max for judge input
-- Keeps API costs low
+**Decision**: ~2000 tokens max for judge input (configurable via `MAX_EVIDENCE_TOKENS`)
+- Larger budget improves judge accuracy with richer context
 - Prevents context window overflow
-- Balances precision vs. cost
+- Per-claim calls use `max_tokens=800` (vs 400 for single-claim) for larger JSON arrays
 
 ## Data Flow Through Full Pipeline
 
@@ -265,20 +264,25 @@ except Exception as e:
 
 ## Performance Optimization Opportunities
 
-### 1. Full-Pipeline Caching (Fully Implemented)
-- **Mechanism**: The backend caches complete verification responses using a deterministic SHA-256 hash of the concatenated question and answer.
-- **Scope**: Cached globally across all users (not user-scoped) to maximize cache-hit rates for duplicate checks.
-- **TTL Policies**:
-  - `encyclopedic`: 7 days (highly stable facts)
-  - `numeric_statistical`: 24 hours (stats updated occasionally)
-  - `recent_event`: 1 hour (news/time-sensitive facts)
-  - `opinion_subjective`: 30 minutes (subjective statements)
-  - *Error Fallbacks*: 60 seconds (temporary errors self-evict quickly)
-- **Storage**: Redis client configuration with in-memory dict fallback if Redis is disabled or unreachable.
+### 1. Caching (Low Hanging Fruit)
+- Cache evidence retrieval by claim hash
+- TTL: 1 hour (might change if configured)
+- Backend: In-memory for dev, Redis for prod
 
-### 2. Async Non-blocking Operations
-- Network operations use async/await construct (`asyncio` native) to support high concurrency.
-- Database logs (MongoDB) are persisted in the background using FastAPI `BackgroundTasks`, so response delivery is never delayed by DB I/O.
+### 2. Batch Processing
+- Accept multiple Q&A pairs in single request
+- Process in parallel
+- Return batch results
+
+### 3. Async I/O
+- Wikipedia API calls can be concurrent
+- SerpAPI calls can be concurrent
+- But don't exceed rate limits
+
+### 4. Smart Routing
+- If answer length > 500 chars, extract multiple claims
+- If query type is "opinion", skip retrieval entirely
+- If score confidence high, skip SerpAPI (save $)
 
 ## Testing Strategy
 
