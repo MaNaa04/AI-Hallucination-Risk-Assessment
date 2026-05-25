@@ -3,7 +3,7 @@
 > **Status**: ✅ Backend Fully Implemented & Running  
 > **Version**: 0.1.0  
 > **Updated**: March 2026  
-> **Stack**: Python · FastAPI · Pydantic v2 · Google Gemini / OpenAI / Groq / Grok · Wikipedia-API · SerpAPI · Redis · MongoDB
+> **Stack**: Python · FastAPI · Pydantic v2 · Google Gemini / OpenAI / Groq / Grok · Wikipedia-API · SerpAPI · Redis · MongoDB · Anthropic · httpx (async)
 
 ---
 
@@ -128,11 +128,12 @@ This is the **orchestrator** of the entire pipeline. Every incoming request gets
 POST /api/verify
   Body: { "question": "...", "answer": "..." }
 
-  → Layer 2: QueryPreprocessor.preprocess(question, answer)
+  → Layer 2: QueryPreprocessor.preprocess_async(question, answer)
   → Layer 3: SourceRouter().retrieve_evidence(claims, query_type)
   → Layer 3: EvidenceAggregator().aggregate(evidence_list)
   → Layer 4: LLMJudge().judge(question, answer, aggregated_evidence)
-  → Layer 5: VerifyResponse.from_judge_response(judge_response, sources, ...)
+  → Layer 4b: LLMJudge().judge_per_claim(question, answer, evidence, claims)  ← NEW
+  → Layer 5: VerifyResponse.from_judge_response(judge_response, sources, provider, model, ...)
 ```
 
 **Error resilience**: Each layer is wrapped in `try/except`. If retrieval or aggregation fails, the pipeline continues with empty evidence. If the LLM judge fails, it falls back to a heuristic scorer. Only preprocessing failure results in HTTP 500.
@@ -146,7 +147,18 @@ POST /api/verify
   "flag": false,
   "sources_used": ["Wikipedia"],
   "request_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
-  "processing_time_ms": 1250
+  "processing_time_ms": 1250,
+  "cache_hit": false,
+  "provider": "gemini",
+  "model": "gemini-2.0-flash",
+  "claim_results": [
+    {
+      "claim_text": "Paris is the capital of France",
+      "score": 95,
+      "verdict": "accurate",
+      "explanation": "Confirmed by Wikipedia."
+    }
+  ]
 }
 ```
 
@@ -198,7 +210,7 @@ class ProcessedQuery:
 
 ### Layer 3A — Wikipedia Retriever (`app/services/retrieval/wikipedia_retriever.py`)
 
-**Library**: `wikipedia-api` (≥ 0.6.0)  
+**Implementation**: Direct async `httpx.AsyncClient` HTTP calls to the Wikipedia MediaWiki API  
 **Free**: Yes — no API key required.  
 **Best for**: Named entities, historical facts, biographical info, scientific concepts.
 
@@ -211,7 +223,11 @@ Wikipedia's API works best with article titles, not sentences. So when given a c
 3. Tries acronyms (e.g., `"FIFA"`, `"NATO"`)
 4. Falls back to the full query string
 
-For each candidate term, it fetches the Wikipedia page summary (up to 3,000 characters) and computes a relevance score (fraction of query words found in the content). Returns the first successful hit.
+For each candidate term, it makes two async HTTP calls:
+- **Search call**: `action=query&list=search` to find the best matching article title
+- **Extract call**: `action=query&prop=extracts&exchars=2000` to fetch page content
+
+Then extracts the top 5 most-relevant snippets ranked by keyword overlap. Results are cached in-memory.
 
 **Returns**: Content string or `None` on failure.
 
@@ -276,7 +292,7 @@ routing_rules = {
    - Contains numbers: +0.5 (numerical data is often factual)
    - Contains boilerplate phrases (`"click here"`, `"subscribe"`, `"cookie"`): −1.0 each
 
-4. **Trim** to token budget (default: **800 tokens ≈ 3,200 characters**):
+4. **Trim** to token budget (default: **2000 tokens ≈ 8,000 characters**):
    - Cuts at the last sentence boundary before the limit (not mid-sentence)
    - Configurable via `MAX_EVIDENCE_TOKENS` in `.env`
 
@@ -292,10 +308,20 @@ Configured via `.env` — **no code changes needed to switch providers**:
 
 | `LLM_PROVIDER` | SDK | Notes |
 |---|---|---|
-| `gemini` (default) | `google-genai` | Free tier available; `gemini-2.0-flash` default |
-| `openai` | `openai` | GPT-4, GPT-3.5-turbo |
+| `gemini` (default) | `openai` (compat endpoint) | Free tier available; `gemini-2.0-flash` default |
+| `openai` | `openai` | GPT-4, GPT-4o, GPT-3.5-turbo |
 | `grok` | `openai` (custom base URL) | `https://api.x.ai/v1` |
 | `groq` | `openai` (custom base URL) | `https://api.groq.com/openai/v1` |
+| `anthropic` | `anthropic` (native SDK) | Claude Sonnet/Haiku; uses `AsyncAnthropic` |
+
+> **⚠️ Tested & Verified (May 2026):**
+>
+> | Provider | Model | Status |
+> |----------|-------|--------|
+> | **Groq** | `llama-3.3-70b-versatile` | ✅ **Working** — Free, ~3s judge response, recommended for development |
+> | Gemini | `gemini-2.0-flash` | ⚠️ Free tier daily quota exhausts quickly |
+> | OpenAI | `gpt-4` / `gpt-4o-mini` | ⚠️ Requires paid billing — free keys return `insufficient_quota` |
+> | Groq | `llama3-70b-8192` | ❌ **Decommissioned** — use `llama-3.3-70b-versatile` instead |
 
 #### Judge Prompt (Evidence-Grounded)
 
@@ -361,6 +387,10 @@ class VerifyResponse(BaseModel):
     sources_used: Optional[list[str]]       # e.g. ["Wikipedia", "SerpAPI"]
     request_id: Optional[str]               # UUID for tracing
     processing_time_ms: Optional[int]       # End-to-end latency
+    cache_hit: bool                         # True if served from cache
+    provider: Optional[str]                 # LLM provider (gemini, anthropic, etc.)
+    model: Optional[str]                    # Specific model (gemini-2.0-flash, etc.)
+    claim_results: Optional[list[ClaimResult]]  # Per-claim scoring breakdown
 ```
 
 ---
@@ -398,14 +428,14 @@ All configuration is loaded from `.env` via `pydantic-settings`. No hardcoded se
 | `APP_DEBUG` | `false` | Enable debug mode + hot reload |
 | `HOST` | `0.0.0.0` | Server bind host |
 | `PORT` | `8000` | Server bind port |
-| `LLM_PROVIDER` | `gemini` | `gemini`, `openai`, `grok`, `groq` |
+| `LLM_PROVIDER` | `gemini` | `gemini`, `openai`, `grok`, `groq`, `anthropic` |
 | `LLM_API_KEY` | _(empty)_ | API key for the chosen LLM provider |
 | `LLM_MODEL` | `gemini-2.0-flash` | Model name |
 | `SERPAPI_KEY` | _(empty)_ | SerpAPI key (optional — graceful skip if absent) |
 | `WIKIPEDIA_API_ENABLED` | `true` | Toggle Wikipedia retrieval |
 | `CACHE_ENABLED` | `true` | Toggle in-memory cache |
 | `CACHE_TTL_SECONDS` | `3600` | Cache TTL (1 hour) |
-| `MAX_EVIDENCE_TOKENS` | `800` | Evidence budget (~3,200 chars) |
+| `MAX_EVIDENCE_TOKENS` | `2000` | Evidence budget (~8,000 chars) |
 | `MAX_CLAIMS_PER_REQUEST` | `3` | Max factual claims to extract per request |
 
 Settings are cached with `@lru_cache()` — loaded once, reused across all requests.
@@ -456,13 +486,12 @@ pydantic-settings==2.1.0
 python-dotenv==1.0.0
 
 # External APIs
-Wikipedia-API>=0.6.0
-google-search-results>=2.4.2      # SerpAPI SDK
+httpx>=0.25.0                     # Async HTTP (Wikipedia, general)
+google-search-results>=2.4.0      # SerpAPI SDK
 
-# LLM Clients (one or more, depending on provider choice)
-google-generativeai>=0.3.0        # Gemini
-openai>=1.3.0                     # OpenAI / Grok / Groq
-anthropic>=0.7.0                  # (future: Claude support)
+# LLM Clients
+openai>=1.3.0                     # OpenAI / Gemini / Grok / Groq (compat endpoint)
+anthropic>=0.39.0                 # Anthropic Claude (native AsyncAnthropic SDK)
 
 # Optional Caching
 redis==5.0.1                      # For production Redis cache
@@ -607,14 +636,14 @@ This table maps the original design decisions from the planning phase to their a
 | Evidence aggregation | ✅ Implemented | Dedup + rank + trim |
 | LLM judge (Gemini default) | ✅ Implemented | Multi-provider: Gemini, OpenAI, Grok, Groq |
 | Heuristic fallback judge | ✅ Implemented | Keyword overlap scoring |
-| Evidence token budget (800) | ✅ Implemented | Configurable via env |
+| Evidence token budget (2000) | ✅ Implemented | Configurable via env |
 | Pydantic v2 models | ✅ Implemented | Full validation |
 | UUID request tracing | ✅ Implemented | Per-request UUID in logs + response |
 | Per-step timing | ✅ Implemented | Millisecond timing logged per step |
 | Caching layer | ✅ Fully built | Redis primary with in-memory TTL fallback |
 | Async I/O for retrieval | ✅ Async parallel I/O | Fully async retrievers using httpx.AsyncClient |
-| Anthropic/Claude support | 🔶 Dependency installed | Not wired in LLMJudge yet |
-| Per-claim scoring | ❌ Not implemented | Single score per request (simpler UX) |
+| Anthropic/Claude support | ✅ Implemented | Native `AsyncAnthropic` SDK, routes through all judge methods |
+| Per-claim scoring | ✅ Implemented | `judge_per_claim()` + `ClaimResult` model + Chrome Extension UI |
 | Redis caching | ✅ Implemented | Configured via REDIS_URL/REDIS_ENABLED settings |
 
 ---

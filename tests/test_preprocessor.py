@@ -131,10 +131,11 @@ class TestDetermineQueryType:
 # ── Full Preprocessing Pipeline ────────────────────────────────────
 
 class TestPreprocess:
-    """Tests for the full preprocess() pipeline."""
+    """Tests for the full preprocess_async() pipeline."""
 
-    def test_returns_processed_query(self):
-        result = QueryPreprocessor.preprocess(
+    @pytest.mark.asyncio
+    async def test_returns_processed_query(self):
+        result = await QueryPreprocessor.preprocess_async(
             "What is the capital of France?",
             "Paris is the capital of France. It is located in northern France."
         )
@@ -143,16 +144,18 @@ class TestPreprocess:
         assert result.query_type == "encyclopedic"
         assert len(result.extracted_claims) > 0
 
-    def test_recent_event_with_claims(self):
-        result = QueryPreprocessor.preprocess(
+    @pytest.mark.asyncio
+    async def test_recent_event_with_claims(self):
+        result = await QueryPreprocessor.preprocess_async(
             "What is the latest news on AI today?",
             "OpenAI released a new model called GPT-5. It performs better on reasoning tasks."
         )
         assert result.query_type == "recent_event"
         assert len(result.extracted_claims) > 0
 
-    def test_opinion_query(self):
-        result = QueryPreprocessor.preprocess(
+    @pytest.mark.asyncio
+    async def test_opinion_query(self):
+        result = await QueryPreprocessor.preprocess_async(
             "Should I buy an iPhone or Android?",
             "It depends on your needs. iPhones are known for their ecosystem."
         )

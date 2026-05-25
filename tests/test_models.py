@@ -5,7 +5,7 @@ Tests for request and response models (Layer 1 & 5).
 import pytest
 from pydantic import ValidationError
 from app.models.request import VerifyRequest
-from app.models.response import JudgeResponse, VerifyResponse
+from app.models.response import JudgeResponse, VerifyResponse, ClaimResult
 
 
 # ── VerifyRequest Tests ────────────────────────────────────────────
@@ -155,3 +155,110 @@ class TestVerifyResponse:
         assert resp.sources_used is None
         assert resp.request_id is None
         assert resp.processing_time_ms is None
+
+
+# ── ClaimResult Tests ─────────────────────────────────────────────
+
+class TestClaimResult:
+    """Tests for ClaimResult model validation."""
+
+    def test_valid_claim_result(self):
+        cr = ClaimResult(
+            claim_text="Paris is the capital of France",
+            score=92,
+            verdict="accurate",
+            explanation="Confirmed by Wikipedia.",
+            source_text="Paris is the capital of France.",
+            start_index=0,
+            end_index=31,
+        )
+        assert cr.score == 92
+        assert cr.verdict == "accurate"
+        assert cr.start_index == 0
+
+    def test_score_boundary_zero(self):
+        cr = ClaimResult(
+            claim_text="test", score=0, verdict="hallucination",
+            explanation="Wrong."
+        )
+        assert cr.score == 0
+
+    def test_score_boundary_100(self):
+        cr = ClaimResult(
+            claim_text="test", score=100, verdict="accurate",
+            explanation="Correct."
+        )
+        assert cr.score == 100
+
+    def test_score_below_0_raises(self):
+        with pytest.raises(ValidationError):
+            ClaimResult(
+                claim_text="test", score=-1, verdict="accurate",
+                explanation="Bad."
+            )
+
+    def test_score_above_100_raises(self):
+        with pytest.raises(ValidationError):
+            ClaimResult(
+                claim_text="test", score=101, verdict="accurate",
+                explanation="Bad."
+            )
+
+    def test_invalid_verdict_raises(self):
+        with pytest.raises(ValidationError):
+            ClaimResult(
+                claim_text="test", score=50, verdict="maybe",
+                explanation="Bad."
+            )
+
+    def test_defaults(self):
+        cr = ClaimResult(
+            claim_text="test", score=50, verdict="uncertain",
+            explanation="Unclear."
+        )
+        assert cr.source_text == ""
+        assert cr.start_index == -1
+        assert cr.end_index == -1
+
+
+# ── VerifyResponse with ClaimResults Tests ─────────────────────────
+
+class TestVerifyResponseWithClaims:
+    """Tests for VerifyResponse with claim_results field."""
+
+    def _make_judge_response(self, score: int) -> JudgeResponse:
+        return JudgeResponse(
+            score=score,
+            verdict="verified" if score >= 60 else "likely_hallucination",
+            explanation="Test explanation.",
+            flag=score < 60
+        )
+
+    def test_claim_results_included(self):
+        judge = self._make_judge_response(85)
+        claims = [
+            ClaimResult(
+                claim_text="Paris is in France",
+                score=95,
+                verdict="accurate",
+                explanation="Confirmed.",
+            )
+        ]
+        resp = VerifyResponse.from_judge_response(judge, claim_results=claims)
+        assert resp.claim_results is not None
+        assert len(resp.claim_results) == 1
+        assert resp.claim_results[0].score == 95
+
+    def test_claim_results_default_none(self):
+        judge = self._make_judge_response(85)
+        resp = VerifyResponse.from_judge_response(judge)
+        assert resp.claim_results is None
+
+    def test_backward_compatibility(self):
+        """VerifyResponse without claim_results still serializes correctly."""
+        judge = self._make_judge_response(70)
+        resp = VerifyResponse.from_judge_response(judge)
+        data = resp.model_dump()
+        assert "claim_results" in data
+        assert data["claim_results"] is None
+        assert data["score"] == 70

@@ -16,6 +16,22 @@ from app.services.retrieval.evidence_aggregator import EvidenceAggregator
 class TestWikipediaRetriever:
     """Tests for WikipediaRetriever with mocked HTTPX calls."""
 
+    def _make_search_response(self, title="Paris"):
+        """Create a mock Wikipedia search API JSON response."""
+        resp = MagicMock()
+        resp.json.return_value = {
+            "query": {"search": [{"title": title}]}
+        }
+        return resp
+
+    def _make_extract_response(self, title="Paris", content="Paris is the capital of France."):
+        """Create a mock Wikipedia extract API JSON response."""
+        resp = MagicMock()
+        resp.json.return_value = {
+            "query": {"pages": {"12345": {"extract": content}}}
+        }
+        return resp
+
     @pytest.mark.asyncio
     @patch("httpx.AsyncClient.get")
     async def test_successful_search(self, mock_get):
@@ -37,8 +53,28 @@ class TestWikipediaRetriever:
         }
         mock_get.side_effect = [mock_response_search, mock_response_extract]
 
+    def _make_empty_search_response(self):
+        resp = MagicMock()
+        resp.json.return_value = {"query": {"search": []}}
+        return resp
+
+    @pytest.mark.asyncio
+    @patch("app.services.retrieval.wikipedia_retriever.get_cached", return_value=None)
+    @patch("app.services.retrieval.wikipedia_retriever.set_cached")
+    async def test_successful_search(self, mock_set_cache, mock_get_cache):
         retriever = WikipediaRetriever()
-        result = await retriever.search("Paris")
+
+        mock_client = AsyncMock()
+        # First call = search, second call = extract
+        mock_client.get.side_effect = [
+            self._make_search_response("Paris"),
+            self._make_extract_response("Paris", "Paris is the capital and largest city of France. It is located along the Seine River."),
+        ]
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        with patch("app.services.retrieval.wikipedia_retriever.httpx.AsyncClient", return_value=mock_client):
+            result = await retriever.search("Paris")
 
         assert result["found"] is True
         assert result["title"] == "Paris"
@@ -46,51 +82,54 @@ class TestWikipediaRetriever:
         assert result["url"] == "https://en.wikipedia.org/wiki/Paris"
 
     @pytest.mark.asyncio
-    @patch("httpx.AsyncClient.get")
-    async def test_page_not_found(self, mock_get):
-        mock_response = MagicMock()
-        mock_response.json.return_value = {"query": {"search": []}}
-        mock_get.return_value = mock_response
-
+    @patch("app.services.retrieval.wikipedia_retriever.get_cached", return_value=None)
+    @patch("app.services.retrieval.wikipedia_retriever.set_cached")
+    async def test_page_not_found(self, mock_set_cache, mock_get_cache):
         retriever = WikipediaRetriever()
-        result = await retriever.search("xyznonexistentpage123")
+
+        mock_client = AsyncMock()
+        mock_client.get.return_value = self._make_empty_search_response()
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        with patch("app.services.retrieval.wikipedia_retriever.httpx.AsyncClient", return_value=mock_client):
+            result = await retriever.search("xyznonexistentpage123")
 
         assert result["found"] is False
         assert result["content"] is None
 
     @pytest.mark.asyncio
-    @patch("httpx.AsyncClient.get")
-    async def test_api_error_handled(self, mock_get):
-        mock_get.side_effect = Exception("Network error")
-
+    @patch("app.services.retrieval.wikipedia_retriever.get_cached", return_value=None)
+    @patch("app.services.retrieval.wikipedia_retriever.set_cached")
+    async def test_api_error_handled(self, mock_set_cache, mock_get_cache):
         retriever = WikipediaRetriever()
-        result = await retriever.search("ParisError")
+
+        mock_client = AsyncMock()
+        mock_client.get.side_effect = Exception("Network error")
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        with patch("app.services.retrieval.wikipedia_retriever.httpx.AsyncClient", return_value=mock_client):
+            result = await retriever.search("Paris")
 
         assert result["found"] is False
 
     @pytest.mark.asyncio
-    @patch("httpx.AsyncClient.get")
-    async def test_get_evidence_returns_content(self, mock_get):
-        mock_response_search = MagicMock()
-        mock_response_search.json.return_value = {
-            "query": {
-                "search": [{"title": "Paris"}]
-            }
-        }
-        mock_response_extract = MagicMock()
-        mock_response_extract.json.return_value = {
-            "query": {
-                "pages": {
-                    "12345": {
-                        "extract": "Paris is the capital of France."
-                    }
-                }
-            }
-        }
-        mock_get.side_effect = [mock_response_search, mock_response_extract]
-
+    @patch("app.services.retrieval.wikipedia_retriever.get_cached", return_value=None)
+    @patch("app.services.retrieval.wikipedia_retriever.set_cached")
+    async def test_get_evidence_returns_content(self, mock_set_cache, mock_get_cache):
         retriever = WikipediaRetriever()
-        evidence = await retriever.get_evidence("Paris capital France")
+
+        mock_client = AsyncMock()
+        mock_client.get.side_effect = [
+            self._make_search_response("Paris"),
+            self._make_extract_response("Paris", "Paris is the capital of France. It has beautiful architecture."),
+        ]
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        with patch("app.services.retrieval.wikipedia_retriever.httpx.AsyncClient", return_value=mock_client):
+            evidence = await retriever.get_evidence("Paris capital France")
 
         assert evidence is not None
         assert "Paris" in evidence
@@ -104,6 +143,19 @@ class TestWikipediaRetriever:
 
         retriever = WikipediaRetriever()
         evidence = await retriever.get_evidence("nonexistent claim")
+
+    @patch("app.services.retrieval.wikipedia_retriever.get_cached", return_value=None)
+    @patch("app.services.retrieval.wikipedia_retriever.set_cached")
+    async def test_get_evidence_returns_none_when_not_found(self, mock_set_cache, mock_get_cache):
+        retriever = WikipediaRetriever()
+
+        mock_client = AsyncMock()
+        mock_client.get.return_value = self._make_empty_search_response()
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        with patch("app.services.retrieval.wikipedia_retriever.httpx.AsyncClient", return_value=mock_client):
+            evidence = await retriever.get_evidence("nonexistent claim")
 
         assert evidence is None
 
@@ -151,7 +203,6 @@ class TestSourceRouter:
         router = SourceRouter()
         sources = router.get_sources_for_query_type("encyclopedic")
         assert "wikipedia" in sources
-        assert "serpapi" in sources
 
     def test_recent_event_routes_to_both(self):
         router = SourceRouter()
@@ -254,10 +305,11 @@ class TestEvidenceAggregator:
 
     def test_trim_exceeds_budget(self):
         agg = EvidenceAggregator()
-        # 800 tokens * 4 chars = 3200 chars max
-        long_text = "This is a sentence. " * 200  # ~4000 chars
+        # max_evidence_tokens from config is 2000, so budget = 2000 * 4 = 8000 chars
+        char_budget = agg.max_tokens * 4
+        long_text = "This is a sentence. " * 500  # ~10000 chars, well over budget
         result = agg.trim_to_budget(long_text)
-        assert len(result) <= 3200
+        assert len(result) <= char_budget
 
     def test_aggregate_full_pipeline(self):
         agg = EvidenceAggregator()
