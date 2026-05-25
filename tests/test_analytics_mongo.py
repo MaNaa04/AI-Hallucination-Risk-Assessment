@@ -172,3 +172,34 @@ async def test_clear_async():
     
     await tracker.clear_async(mock_db, user_id="user_abc")
     mock_collection.delete_many.assert_called_once_with({"user_id": "user_abc"})
+
+
+@pytest.mark.asyncio
+async def test_get_events_async_converts_objectid():
+    tracker = AnalyticsTracker()
+    from bson import ObjectId
+
+    oid = ObjectId()
+    mock_db = MagicMock()
+    mock_cursor = MagicMock()
+    mock_cursor.limit = MagicMock(return_value=mock_cursor)
+    mock_cursor.to_list = AsyncMock(return_value=[
+        {
+            "_id": oid,
+            "request_id": "req_1",
+            "timestamp": "2026-05-25T12:00:00Z",
+            "score": 90,
+            "verdict": "accurate",
+            "sources_used": ["Wikipedia"],
+            "processing_time_ms": 200,
+            "query_type": "encyclopedic",
+            "user_id": "user_abc",
+        }
+    ])
+    mock_collection = MagicMock()
+    mock_collection.find.return_value.sort.return_value = mock_cursor
+    mock_db.__getitem__ = MagicMock(return_value=mock_collection)
+
+    events = await tracker.get_events_async(mock_db, user_id="user_abc", limit=50)
+    assert len(events) == 1
+    assert events[0]["_id"] == str(oid)

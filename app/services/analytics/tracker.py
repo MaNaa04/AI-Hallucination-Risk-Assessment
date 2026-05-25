@@ -92,11 +92,15 @@ class AnalyticsTracker:
 
         order = -1 if sort_descending else 1
         from app.db.mongo import EVENTS_COLLECTION
-        cursor = db[EVENTS_COLLECTION].find(query, {"_id": 0}).sort("timestamp", order)
+        cursor = db[EVENTS_COLLECTION].find(query).sort("timestamp", order)
         if limit:
             cursor = cursor.limit(limit)
 
-        return await cursor.to_list(length=limit or 10000)
+        docs = await cursor.to_list(length=limit or 10000)
+        for doc in docs:
+            if doc and "_id" in doc:
+                doc["_id"] = str(doc["_id"])
+        return docs
 
     async def get_events_async(self, db, user_id: str | None = None, limit: int = 50) -> list[dict]:
         """Get recent events, newest first."""

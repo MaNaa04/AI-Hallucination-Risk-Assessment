@@ -357,3 +357,31 @@ class TestUserHistoryRepositoryMock:
         assert len(results) == 2
         assert results[0]["score"] == 80
         assert results[1]["score"] == 30
+
+    @pytest.mark.asyncio
+    async def test_list_for_user_converts_objectid(self):
+        """Verify that _id of type ObjectId is converted to string representation."""
+        from app.db.mongo import UserHistoryRepository
+        from bson import ObjectId
+
+        oid = ObjectId()
+        mock_docs = [
+            {"_id": oid, "user_id": TEST_USER_ID, "score": 80, "verdict": "accurate"}
+        ]
+
+        mock_cursor = MagicMock()
+        mock_cursor.sort = MagicMock(return_value=mock_cursor)
+        mock_cursor.skip = MagicMock(return_value=mock_cursor)
+        mock_cursor.limit = MagicMock(return_value=mock_cursor)
+        mock_cursor.to_list = AsyncMock(return_value=mock_docs)
+
+        mock_collection = MagicMock()
+        mock_collection.find = MagicMock(return_value=mock_cursor)
+
+        mock_db = MagicMock()
+        mock_db.__getitem__ = MagicMock(return_value=mock_collection)
+
+        repo = UserHistoryRepository(mock_db)
+        results = await repo.list_for_user(TEST_USER_ID, skip=0, limit=20)
+
+        assert results[0]["_id"] == str(oid)
