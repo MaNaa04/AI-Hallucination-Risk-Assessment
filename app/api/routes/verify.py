@@ -52,6 +52,9 @@ _QUERY_TYPE_TTL: dict[str, int] = {
 _DEFAULT_VERIFY_TTL: int = 3600    # 1 hour fallback for unknown query types
 
 
+# ── Constants ─────────────────────────────────────────────────────────────────
+_MAX_QUESTION_LOG_CHARS = 1000  # Truncate question before passing to background task
+
 # ── Background task: async history persistence ────────────────────────────────
 
 async def _write_history(
@@ -160,16 +163,22 @@ async def verify(
 
         # Still write history for cache hits — the user's audit trail should
         # record every request they made, cached or not.
-        background_tasks.add_task(
-            _write_history,
-            db=request.app.state.db,
-            user_id=user_id,
-            request_id=request_id,
-            question=body.question,
-            score=final_response.score,
-            verdict=final_response.verdict,
-            cache_hit=True,
-        )
+        if request.app.state.db is not None:
+            background_tasks.add_task(
+                _write_history,
+                db=request.app.state.db,
+                user_id=user_id,
+                request_id=request_id,
+                question=body.question[:_MAX_QUESTION_LOG_CHARS],
+                score=final_response.score,
+                verdict=final_response.verdict,
+                cache_hit=True,
+            )
+        else:
+            logger.warning(
+                f"[{request_id}] Pipeline OK but history logging skipped — "
+                f"MongoDB is unavailable"
+            )
         return final_response
 
     # ── Pull singletons from app.state ────────────────────────────────────────
@@ -390,16 +399,22 @@ async def verify(
 
     # ── Background: persist per-user history to MongoDB ──────────────────────
     # This fires AFTER the response has been sent — zero latency impact.
-    background_tasks.add_task(
-        _write_history,
-        db=request.app.state.db,
-        user_id=user_id,
-        request_id=request_id,
-        question=body.question,
-        score=final_response.score,
-        verdict=final_response.verdict,
-        cache_hit=False,
-    )
+    if request.app.state.db is not None:
+        background_tasks.add_task(
+            _write_history,
+            db=request.app.state.db,
+            user_id=user_id,
+            request_id=request_id,
+            question=body.question[:_MAX_QUESTION_LOG_CHARS],
+            score=final_response.score,
+            verdict=final_response.verdict,
+            cache_hit=False,
+        )
+    else:
+        logger.warning(
+            f"[{request_id}] Pipeline OK but history logging skipped — "
+            f"MongoDB is unavailable"
+        )
 
     logger.info(
         f"[{request_id}] Verify pipeline complete ({processing_time_ms}ms) | "
