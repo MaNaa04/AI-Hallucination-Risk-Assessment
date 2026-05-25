@@ -80,28 +80,20 @@ class TestVerifyEndpointSuccess:
     """Tests for the happy path of /api/verify."""
 
     @pytest.mark.asyncio
-    @patch("app.api.routes.verify.LLMJudge")
-    @patch("app.api.routes.verify.EvidenceAggregator")
-    @patch("app.api.routes.verify.SourceRouter")
     @patch("app.api.routes.verify.QueryPreprocessor")
     async def test_full_pipeline_success(
-        self, mock_preprocessor, mock_router_cls, mock_aggregator_cls, mock_judge_cls
+        self, mock_preprocessor, mock_app_dependencies
     ):
+        mock_sr, mock_judge, mock_agg, _ = mock_app_dependencies
         # Setup mocks — all async methods need AsyncMock
         mock_preprocessor.preprocess_async = AsyncMock(return_value=MOCK_PROCESSED)
 
-        mock_router = MagicMock()
-        mock_router.retrieve_evidence = AsyncMock(return_value=MOCK_EVIDENCE_MAP)
-        mock_router_cls.return_value = mock_router
+        mock_sr.retrieve_evidence = AsyncMock(return_value=MOCK_EVIDENCE_MAP)
 
-        mock_aggregator = MagicMock()
-        mock_aggregator.aggregate.return_value = "Paris is the capital and largest city of France."
-        mock_aggregator_cls.return_value = mock_aggregator
+        mock_agg.aggregate.return_value = "Paris is the capital and largest city of France."
 
-        mock_judge = MagicMock()
         mock_judge.judge = AsyncMock(return_value=MOCK_JUDGE_RESPONSE)
         mock_judge.judge_per_claim = AsyncMock(return_value=[])
-        mock_judge_cls.return_value = mock_judge
 
         transport = httpx.ASGITransport(app=app)
         async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
@@ -175,31 +167,22 @@ class TestVerifyEndpointDegradation:
     """Tests for graceful degradation when services fail."""
 
     @pytest.mark.asyncio
-    @patch("app.api.routes.verify.LLMJudge")
-    @patch("app.api.routes.verify.EvidenceAggregator")
-    @patch("app.api.routes.verify.SourceRouter")
     @patch("app.api.routes.verify.QueryPreprocessor")
     async def test_retrieval_failure_degrades_gracefully(
-        self, mock_preprocessor, mock_router_cls, mock_aggregator_cls, mock_judge_cls
+        self, mock_preprocessor, mock_app_dependencies
     ):
         """When retrieval fails, pipeline continues with empty evidence."""
+        mock_sr, mock_judge, mock_agg, _ = mock_app_dependencies
         mock_preprocessor.preprocess_async = AsyncMock(return_value=MOCK_PROCESSED)
 
-        mock_router = MagicMock()
-        mock_router.retrieve_evidence = AsyncMock(side_effect=Exception("Wikipedia API down"))
-        mock_router_cls.return_value = mock_router
+        mock_sr.retrieve_evidence = AsyncMock(side_effect=Exception("Wikipedia API down"))
+        mock_agg.aggregate.return_value = ""
 
-        mock_aggregator = MagicMock()
-        mock_aggregator.aggregate.return_value = ""
-        mock_aggregator_cls.return_value = mock_aggregator
-
-        mock_judge = MagicMock()
         mock_judge.judge = AsyncMock(return_value=JudgeResponse(
             score=50, verdict="unverifiable",
             explanation="No evidence available.", flag=False
         ))
         mock_judge.judge_per_claim = AsyncMock(return_value=[])
-        mock_judge_cls.return_value = mock_judge
 
         transport = httpx.ASGITransport(app=app)
         async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
@@ -209,28 +192,19 @@ class TestVerifyEndpointDegradation:
         assert data["verdict"] == "uncertain"  # score 50 → uncertain
 
     @pytest.mark.asyncio
-    @patch("app.api.routes.verify.LLMJudge")
-    @patch("app.api.routes.verify.EvidenceAggregator")
-    @patch("app.api.routes.verify.SourceRouter")
     @patch("app.api.routes.verify.QueryPreprocessor")
     async def test_judge_failure_returns_neutral(
-        self, mock_preprocessor, mock_router_cls, mock_aggregator_cls, mock_judge_cls
+        self, mock_preprocessor, mock_app_dependencies
     ):
         """When LLM judge fails, return neutral score."""
+        mock_sr, mock_judge, mock_agg, _ = mock_app_dependencies
         mock_preprocessor.preprocess_async = AsyncMock(return_value=MOCK_PROCESSED)
 
-        mock_router = MagicMock()
-        mock_router.retrieve_evidence = AsyncMock(return_value=MOCK_EVIDENCE_MAP)
-        mock_router_cls.return_value = mock_router
+        mock_sr.retrieve_evidence = AsyncMock(return_value=MOCK_EVIDENCE_MAP)
+        mock_agg.aggregate.return_value = "Some evidence"
 
-        mock_aggregator = MagicMock()
-        mock_aggregator.aggregate.return_value = "Some evidence"
-        mock_aggregator_cls.return_value = mock_aggregator
-
-        mock_judge = MagicMock()
         mock_judge.judge = AsyncMock(side_effect=Exception("LLM API timeout"))
         mock_judge.judge_per_claim = AsyncMock(return_value=[])
-        mock_judge_cls.return_value = mock_judge
 
         transport = httpx.ASGITransport(app=app)
         async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
