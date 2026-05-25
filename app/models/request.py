@@ -3,7 +3,7 @@ Request models for API validation.
 Layer 1: API Gateway input validation
 """
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, ConfigDict
 
 
 class VerifyRequest(BaseModel):
@@ -33,10 +33,11 @@ class VerifyRequest(BaseModel):
         """Strip leading/trailing whitespace."""
         return v.strip()
     
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "question": "What is the capital of France?",
                 "answer": "The capital of France is Paris, located along the Seine River."
             }
         }
+    )

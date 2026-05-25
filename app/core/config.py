@@ -5,7 +5,7 @@ Loads environment variables from .env file.
 
 import json
 from typing import Any
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import Field, field_validator
 from functools import lru_cache
 
@@ -100,10 +100,11 @@ class Settings(BaseSettings):
         description="MongoDB database name for per-user history",
     )
 
-    class Config:
-        env_file = ".env"
-        case_sensitive = False
-        extra = "ignore"
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        case_sensitive=False,
+        extra="ignore"
+    )
 
 
 @lru_cache()
